@@ -2172,16 +2172,16 @@
     "defaultMessage": "Memastikan fail dikemas kini apabila pelayan berubah"
   },
   "modal.open-in-app.get-app": {
-    "defaultMessage": "Dapatkan Modrinth App"
+    "defaultMessage": "Dapatkan ACL"
   },
   "modal.open-in-app.opening-automatically": {
-    "defaultMessage": "Modrinth App akan dibuka secara automatik..."
+    "defaultMessage": "ACL akan dibuka secara automatik..."
   },
   "modal.open-in-app.title": {
-    "defaultMessage": "Membuka Modrinth App"
+    "defaultMessage": "Membuka ACL"
   },
   "modal.open-in-app.why-use": {
-    "defaultMessage": "Mengapa menggunakan Modrinth App"
+    "defaultMessage": "Mengapa menggunakan ACL"
   },
   "notification.error.title": {
     "defaultMessage": "Sebuah ralat telah berlaku"
@@ -3807,7 +3807,7 @@
     "defaultMessage": "Pelayan baharu"
   },
   "servers.list-empty.no-servers-description": {
-    "defaultMessage": "Pasang mod, jemput rakan dan main bersama-sama, semuanya dari Modrinth App."
+    "defaultMessage": "Pasang mod, jemput rakan dan main bersama-sama, semuanya dari ACL."
   },
   "servers.list-empty.one-click-mod-installs-description": {
     "defaultMessage": "Pilih mod kegemaran anda dan kami uruskan selebihnya."

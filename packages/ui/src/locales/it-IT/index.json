@@ -3024,16 +3024,16 @@
     "defaultMessage": "Tieni i file aggiornati coi server"
   },
   "modal.open-in-app.get-app": {
-    "defaultMessage": "Scarica Modrinth App"
+    "defaultMessage": "Scarica ACL"
   },
   "modal.open-in-app.opening-automatically": {
-    "defaultMessage": "Modrinth App si aprirà automaticamente..."
+    "defaultMessage": "ACL si aprirà automaticamente..."
   },
   "modal.open-in-app.title": {
-    "defaultMessage": "Apertura di Modrinth App"
+    "defaultMessage": "Apertura di ACL"
   },
   "modal.open-in-app.why-use": {
-    "defaultMessage": "Perché usare Modrinth App"
+    "defaultMessage": "Perché usare ACL"
   },
   "notification.error.title": {
     "defaultMessage": "Si è verificato un errore"
@@ -5370,7 +5370,7 @@
     "defaultMessage": "Nuovo server"
   },
   "servers.list-empty.no-servers-description": {
-    "defaultMessage": "Crea un server, con o senza mod, e invita chi vuoi tramite la Modrinth App."
+    "defaultMessage": "Crea un server, con o senza mod, e invita chi vuoi tramite la ACL."
   },
   "servers.list-empty.one-click-mod-installs-description": {
     "defaultMessage": "Scegli le tue mod preferite, al resto ci pensiamo noi."
@@ -5379,7 +5379,7 @@
     "defaultMessage": "Installa mod con un clic"
   },
   "servers.list-empty.play-with-friends-description": {
-    "defaultMessage": "Invita i tuoi amici a giocare con un semplice clic tramite la Modrinth App."
+    "defaultMessage": "Invita i tuoi amici a giocare con un semplice clic tramite la ACL."
   },
   "servers.list-empty.play-with-friends-title": {
     "defaultMessage": "Gioca con chiunque"
@@ -6012,7 +6012,7 @@
     "defaultMessage": "Scuro"
   },
   "settings.display.theme.description": {
-    "defaultMessage": "Scegli il tema che Modrinth App userà."
+    "defaultMessage": "Scegli il tema che ACL userà."
   },
   "settings.display.theme.light": {
     "defaultMessage": "Chiaro"
@@ -6057,7 +6057,7 @@
     "defaultMessage": "Risultati di ricerca"
   },
   "settings.language.coverage.app-tooltip": {
-    "defaultMessage": "{percentage}% circa di Modrinth App è disponibile in questa lingua."
+    "defaultMessage": "{percentage}% circa di ACL è disponibile in questa lingua."
   },
   "settings.language.coverage.label": {
     "defaultMessage": "{percentage}% supportata"

@@ -162,7 +162,7 @@
     "message": "Gem nametag"
   },
   "app.appearance-settings.minimize-launcher.description": {
-    "message": "Minimér Modrinth App når Minecraft starter."
+    "message": "Minimér ACL når Minecraft starter."
   },
   "app.appearance-settings.minimize-launcher.title": {
     "message": "Minimer app"
@@ -708,13 +708,13 @@
     "message": "Slå til"
   },
   "app.update-popup.body.download-complete": {
-    "message": "Modrinth App v{version} er færdig med at download. Genindlæs for at opdatere nu, eller automatisk når du lukker Modrinth App."
+    "message": "ACL v{version} er færdig med at download. Genindlæs for at opdatere nu, eller automatisk når du lukker ACL."
   },
   "app.update-popup.body.linux": {
-    "message": "Modrinth App v{version} er nu tilgængelig. Brug din pakke-manager til at opdatere for de nyeste features og fejlrettelser!"
+    "message": "ACL v{version} er nu tilgængelig. Brug din pakke-manager til at opdatere for de nyeste features og fejlrettelser!"
   },
   "app.update-popup.body.metered": {
-    "message": "Modrinth App v{version} er nu tilgængelig! Siden du er på et begrænset netværk, vi downloadede den ikke automatisk."
+    "message": "ACL v{version} er nu tilgængelig! Siden du er på et begrænset netværk, vi downloadede den ikke automatisk."
   },
   "app.update-popup.changelog": {
     "message": "Ændringslog"

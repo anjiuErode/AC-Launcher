@@ -7,7 +7,6 @@ import {
 	HeartHandshakeIcon,
 	LanguagesIcon,
 	LightBulbIcon,
-	ModrinthIcon,
 	PaintbrushIcon,
 	RefreshCwIcon,
 	Settings2Icon,
@@ -42,6 +41,7 @@ import FeatureFlagSettings from '@/features/settings/display/feature-flag-settin
 import FeaturesSettings from '@/features/settings/display/features-settings.vue'
 import LanguageSettings from '@/features/settings/display/language-settings.vue'
 import JavaAndMemorySettings from '@/features/settings/instance-defaults/java-and-memory-settings/index.vue'
+import PerformanceSettings from '@/features/settings/system/performance-settings.vue'
 import LaunchHooksSettings from '@/features/settings/instance-defaults/launch-hooks-settings.vue'
 import WindowSettings from '@/features/settings/instance-defaults/window-settings.vue'
 import type { InstanceDefaultsTab } from '@/features/settings/settings-actions'
@@ -187,6 +187,15 @@ const tabs = [
 		category: tabCategories.instanceDefaults,
 		icon: RefreshCwIcon,
 		content: SyncingSettings,
+	},
+	{
+		name: defineMessage({
+			id: 'app.settings.tabs.performance',
+			defaultMessage: 'Performance',
+		}),
+		category: tabCategories.system,
+		icon: GaugeIcon,
+		content: PerformanceSettings,
 	},
 	{
 		name: defineMessage({
@@ -361,7 +370,7 @@ const messages = defineMessages({
 	},
 	appVersion: {
 		id: 'app.settings.app-version',
-		defaultMessage: 'Modrinth App {version}',
+		defaultMessage: 'ACL {version}',
 	},
 	macos: {
 		id: 'app.settings.operating-system.macos',
@@ -423,12 +432,18 @@ const messages = defineMessages({
 						}"
 						@click="devModeCount"
 					>
-						<ModrinthIcon aria-hidden="true" class="w-6 h-6" />
+						<img
+							src="@/assets/branding/acl-badge.png"
+							alt="ACL"
+							class="w-6 h-6 rounded"
+							aria-hidden="true"
+						/>
 					</button>
 					<div v-if="appInfo" class="max-w-[200px]">
 						<p class="m-0">
 							{{ formatMessage(messages.appVersion, { version: appInfo.version }) }}
 						</p>
+						<p class="m-0 text-secondary">AnjiuCraftLauncher · YingZhouAssociation</p>
 						<p class="m-0">
 							<span v-if="appInfo.osPlatform === 'macos'">{{ formatMessage(messages.macos) }}</span>
 							<span v-else class="capitalize">{{ appInfo.osPlatform }}</span>

@@ -19,7 +19,7 @@
 				"installerHooks": "./nsis/hooks.nsi"
 			}
 		},
-		"longDescription": "",
+		"longDescription": "AnjiuCraftLauncher (ACL) — YingZhouAssociation",
 		"macOS": {
 			"entitlements": "App.entitlements",
 			"exceptionDomain": "",
@@ -42,7 +42,7 @@
 				}
 			}
 		},
-		"shortDescription": "",
+		"shortDescription": "AnjiuCraftLauncher (ACL)",
 		"linux": {
 			"deb": {
 				"depends": []
@@ -55,10 +55,10 @@
 			}
 		]
 	},
-	"productName": "Modrinth App",
+	"productName": "ACL",
 	"version": "../app-frontend/package.json",
-	"mainBinaryName": "Modrinth App",
-	"identifier": "ModrinthApp",
+	"mainBinaryName": "ACL",
+	"identifier": "com.anjiu.acl",
 	"plugins": {
 		"deep-link": {
 			"desktop": {
@@ -77,7 +77,7 @@
 				"fullscreen": false,
 				"height": 800,
 				"resizable": true,
-				"title": "Modrinth App",
+				"title": "ACL",
 				"label": "main",
 				"width": 1280,
 				"minHeight": 700,

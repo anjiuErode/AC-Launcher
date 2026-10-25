@@ -1,20 +1,31 @@
-<picture>
-	<source media="(prefers-color-scheme: light)" srcset=".github/assets/monorepo_cover_light.png">
-	<img alt="Modrinth Monorepo Cover" src=".github/assets/monorepo_cover.png">
-</picture>
+# ACL — AnjiuCraftLauncher
 
-![Issues](https://img.shields.io/github/issues-raw/Modrinth/code?color=c78aff&label=issues&style=for-the-badge)
-![Pull Requests](https://img.shields.io/github/issues-pr-raw/Modrinth/code?color=c78aff&label=PRs&style=for-the-badge)
-![Contributors](https://img.shields.io/github/contributors/Modrinth/code?color=c78aff&label=contributors&style=for-the-badge)
-![Lines of Code](https://img.shields.io/endpoint?url=https://loctopus.creeperkatze.dev/github/modrinth/code/badge?style=flat&logoColor=white&color=c78aff&style=for-the-badge)
-![Commit Activity](https://img.shields.io/github/commit-activity/m/Modrinth/code?color=c78aff&label=commits&style=for-the-badge)
-![Last Commit](https://img.shields.io/github/last-commit/Modrinth/code?color=c78aff&label=last%20commit&style=for-the-badge)
+瀛洲公会（YingZhouAssociation）Minecraft 启动器。基于 [Modrinth Theseus](https://github.com/modrinth/code) 的 GPL-3.0 开源分支。
 
-## Modrinth Monorepo
+- 下载：[Releases](https://github.com/anjiuErode/code/releases)
+- 本仓库是 GitHub fork，保留上游提交历史；所有修改见 [NOTICE.md](NOTICE.md)
+- 与 Rinth, Inc. 无隶属关系，未获其背书
 
-Welcome to the Modrinth Monorepo, the primary codebase for the Modrinth website, app, API and documentation. It contains ![Lines of code](https://img.shields.io/endpoint?url=https://loctopus.creeperkatze.dev/github/modrinth/code/badge%3Fformat%3Dhuman&logoColor=white&color=black&label=) lines of code and has ![Contributors](https://img.shields.io/github/contributors/Modrinth/code?color=black&label=) contributors!
+## Code signing policy
 
-If you're not a developer and you've stumbled upon this repository, you can access the web interface on the [Modrinth website](https://modrinth.com) and download the latest release of the app [here](https://modrinth.com/app).
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: anjiuErode
+- Approvers: anjiuErode
+- This program does not include telemetry, and will not transfer any
+  information to other networked systems unless specifically requested by the
+  user or the person installing or operating it.
+
+## 与上游的差异
+
+| 类别 | 改动 |
+| --- | --- |
+| 品牌 | 名称改为 ACL，标识符 `com.anjiu.acl`，全套图标、启动画面与界面文案替换 |
+| 主题 | 浅色为白底黑字、深色为黑底白字，强调色改为单色 |
+| 本地化 | 补齐简体中文，系统语言为中文时默认使用中文 |
+| 功能 | 设置 → 系统 → 性能：硬件加速开关（WebView2 GPU 参数） |
+| 更新 | 已关闭上游自动更新，不会从 Modrinth 官方源更新 |
+| 合规 | 已移除上游品牌资产（`.idea/icon.svg`、`.github/assets/`） |
 
 ## Development
 

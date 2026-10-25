@@ -704,8 +704,15 @@ async function setupApp() {
 	} = await traceStartupStep('Read startup settings', getSettings)
 
 	// Initialize locale from saved settings
-	if (locale) {
-		await traceStartupStep('Apply startup locale', () => setLocale(locale))
+	// 未显式选择语言（仍为默认 en-US）时跟随系统语言，中文系统默认简体中文
+	const resolveStartupLocale = (saved) => {
+		if (saved && saved !== 'en-US') return saved
+		const systemLocale = (navigator.language || '').toLowerCase()
+		return systemLocale.startsWith('zh') ? 'zh-CN' : saved || 'en-US'
+	}
+	const startupLocale = resolveStartupLocale(locale)
+	if (startupLocale) {
+		await traceStartupStep('Apply startup locale', () => setLocale(startupLocale))
 	}
 
 	Object.assign(appSettings.featureFlags, feature_flags)
@@ -1584,16 +1591,16 @@ const updatePopupMessages = defineMessages({
 	},
 	meteredBody: {
 		id: 'app.update-popup.body.metered',
-		defaultMessage: `Modrinth App v{version} is available now! Since you're on a metered network, we didn't automatically download it.`,
+		defaultMessage: `ACL v{version} is available now! Since you're on a metered network, we didn't automatically download it.`,
 	},
 	downloadedBody: {
 		id: 'app.update-popup.body.download-complete',
-		defaultMessage: `Modrinth App v{version} has finished downloading. Reload to update now, or automatically when you close Modrinth App.`,
+		defaultMessage: `ACL v{version} has finished downloading. Reload to update now, or automatically when you close ACL.`,
 	},
 	linuxBody: {
 		id: 'app.update-popup.body.linux',
 		defaultMessage:
-			'Modrinth App v{version} is available. Use your package manager to update for the latest features and fixes!',
+			'ACL v{version} is available. Use your package manager to update for the latest features and fixes!',
 	},
 	reload: {
 		id: 'app.update-popup.reload',

@@ -114,6 +114,77 @@ async fn set_restart_after_pending_update(
 
 // if Tauri app is called with arguments, then those arguments will be treated as commands
 // ie: deep links or filepaths for .mrpacks
+/// 硬件加速配置文件路径（与 Tauri 的 appConfigDir 保持一致）
+fn gpu_config_path(identifier: &str) -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(|home| std::path::PathBuf::from(home).join("Library/Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".config"))
+        });
+
+    base.map(|dir| dir.join(identifier).join("gpu.json"))
+}
+
+fn read_hardware_acceleration(identifier: &str) -> bool {
+    let Some(path) = gpu_config_path(identifier) else {
+        return true;
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return true;
+    };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|value| value.get("hardware_acceleration").and_then(|v| v.as_bool()))
+        .unwrap_or(true)
+}
+
+fn write_hardware_acceleration(identifier: &str, enabled: bool) -> Result<(), String> {
+    let path = gpu_config_path(identifier)
+        .ok_or_else(|| "无法定位应用配置目录".to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let payload = serde_json::json!({ "hardware_acceleration": enabled });
+    std::fs::write(&path, payload.to_string()).map_err(|e| e.to_string())
+}
+
+/// 必须在创建 WebView 之前调用，WebView2 只读取一次该环境变量
+fn apply_hardware_acceleration(identifier: &str) {
+    let enabled = read_hardware_acceleration(identifier);
+    #[cfg(target_os = "windows")]
+    {
+        let args = if enabled {
+            "--ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy \
+             --enable-features=CanvasOopRasterization"
+        } else {
+            "--disable-gpu --disable-gpu-compositing --disable-software-rasterizer"
+        };
+        // SAFETY: 单线程启动阶段调用，早于 WebView2 初始化
+        unsafe { std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args) };
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = enabled;
+    }
+    tracing::info!("Hardware acceleration preference: {enabled}");
+}
+
+#[tauri::command]
+fn get_hardware_acceleration(app: tauri::AppHandle) -> bool {
+    read_hardware_acceleration(&app.config().identifier)
+}
+
+#[tauri::command]
+fn set_hardware_acceleration(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    write_hardware_acceleration(&app.config().identifier, enabled)
+}
+
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -144,6 +215,8 @@ fn main() {
     */
 
     let tauri_context = tauri::generate_context!();
+
+    apply_hardware_acceleration(&tauri_context.config().identifier);
 
     let _log_guard = theseus::start_logger(&tauri_context.config().identifier);
 
@@ -340,6 +413,8 @@ fn main() {
             toggle_decorations,
             show_window,
             restart_app,
+            get_hardware_acceleration,
+            set_hardware_acceleration,
         ]);
 
     tracing::info!("Initializing app...");
