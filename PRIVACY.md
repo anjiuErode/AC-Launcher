@@ -36,7 +36,6 @@ launcher. Log files stay on disk unless you choose to share them.
 Delete the application data directory:
 
 - Windows: `%APPDATA%\com.anjiu.acl`
-- macOS: `~/Library/Application Support/com.anjiu.acl`
 
 Uninstalling does not delete this directory automatically.
 
