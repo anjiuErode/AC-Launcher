@@ -1,4 +1,118 @@
 {
+	"app": {
+		"file-download": {
+			"canceling": {
+				"message": "正在取消下载…"
+			},
+			"preparing": {
+				"message": "正在准备下载…"
+			},
+			"waiting": {
+				"message": "正在等待服务器响应…"
+			}
+		},
+		"modal": {
+			"install-to-play": {
+				"unavailable-description": {
+					"message": "该服务器使用的整合包版本目前无法下载，可能已被取消发布或正在审核中。请稍后再试，或联系服务器管理员。"
+				},
+				"unavailable-header": {
+					"message": "该服务器的整合包不可用"
+				}
+			}
+		},
+		"settings": {
+			"sidebar": {
+				"label": {
+					"instance-defaults": {
+						"message": "实例默认设置"
+					},
+					"system": {
+						"message": "系统"
+					}
+				}
+			},
+			"tabs": {
+				"java-and-memory": {
+					"message": "Java 与内存"
+				},
+				"launch-hooks": {
+					"message": "启动钩子"
+				},
+				"resources": {
+					"message": "资源"
+				},
+				"syncing": {
+					"message": "同步"
+				},
+				"troubleshooting": {
+					"message": "疑难解答"
+				},
+				"window": {
+					"message": "窗口"
+				},
+				"performance": {
+					"message": "性能"
+				}
+			},
+			"troubleshooting": {
+				"clear-cache": {
+					"message": "清除缓存",
+					"confirm": {
+						"title": {
+							"message": "确定清除应用缓存？"
+						}
+					}
+				},
+				"report-ad": {
+					"copied": {
+						"message": "已复制"
+					},
+					"copy": {
+						"message": "复制广告信息"
+					},
+					"description": {
+						"message": "看到不当或令人反感的广告？在广告显示时复制其信息，并发送给 <support>Modrinth 支持团队</support>。我们会审核并移除该广告。"
+					},
+					"no-ad": {
+						"text": {
+							"message": "请等待广告加载完成后再试。"
+						},
+						"title": {
+							"message": "未找到广告"
+						}
+					},
+					"title": {
+						"message": "举报广告"
+					}
+				}
+			}
+		},
+		"shared-instance-publish": {
+			"preparing": {
+				"message": "正在准备更新…"
+			},
+			"pushed": {
+				"message": "更新已推送"
+			},
+			"uploading": {
+				"message": "正在推送更新…"
+			}
+		},
+		"performance-settings": {
+			"hardware-acceleration": {
+				"title": {
+					"message": "硬件加速"
+				},
+				"description": {
+					"message": "使用 GPU 渲染界面。如果窗口变黑、闪烁或显卡驱动崩溃，请关闭此项。"
+				},
+				"restart-hint": {
+					"message": "重启 ACL 后生效。"
+				}
+			}
+		}
+	},
 	"app.action-bar.downloading-java": {
 		"message": "正在下载 Java {version}"
 	},
@@ -1408,6 +1522,51 @@
 	},
 	"app.navigation.next-image": {
 		"message": "下一张图片"
+	},
+	"app.network-settings.proxy.description": {
+		"message": "控制 ACL 访问 Modrinth 与微软登录的方式。除非明确知道需要，否则保持自动即可。"
+	},
+	"app.network-settings.proxy.mode-auto": {
+		"message": "自动"
+	},
+	"app.network-settings.proxy.mode-auto-desc": {
+		"message": "优先跟随系统代理，其次使用代理环境变量"
+	},
+	"app.network-settings.proxy.mode-manual": {
+		"message": "手动"
+	},
+	"app.network-settings.proxy.mode-manual-desc": {
+		"message": "使用下方填写的代理地址"
+	},
+	"app.network-settings.proxy.mode-off": {
+		"message": "直连"
+	},
+	"app.network-settings.proxy.mode-off-desc": {
+		"message": "忽略所有代理设置，直接连接"
+	},
+	"app.network-settings.proxy.reachable": {
+		"message": "可达"
+	},
+	"app.network-settings.proxy.save": {
+		"message": "保存"
+	},
+	"app.network-settings.proxy.saved": {
+		"message": "已保存。重启 ACL 后新的代理设置生效。"
+	},
+	"app.network-settings.proxy.test": {
+		"message": "测试连接"
+	},
+	"app.network-settings.proxy.test-hint": {
+		"message": "用上方设置试连 Modrinth 与微软登录，不会保存"
+	},
+	"app.network-settings.proxy.title": {
+		"message": "网络代理"
+	},
+	"app.network-settings.proxy.unreachable": {
+		"message": "失败"
+	},
+	"app.network-settings.proxy.url-placeholder": {
+		"message": "http://127.0.0.1:7890"
 	},
 	"app.news.title": {
 		"message": "新闻"
@@ -3116,6 +3275,9 @@
 	"app.settings.tabs.language": {
 		"message": "语言"
 	},
+	"app.settings.tabs.network": {
+		"message": "网络"
+	},
 	"app.settings.tabs.privacy": {
 		"message": "隐私"
 	},
@@ -3489,7 +3651,7 @@
 		"message": "按 <shortcut>N</shortcut> 键快速创建实例"
 	},
 	"app.welcome-screen.title": {
-		"message": "欢迎使用 Modrinth"
+		"message": "欢迎使用 ACL"
 	},
 	"app.world.server-modal.placeholder-address": {
 		"message": "example.modrinth.gg"
@@ -3649,6 +3811,87 @@
 	},
 	"installation-settings.unpublish-shared-instance.modal.header": {
 		"message": "取消发布共享实例"
+	},
+	"instance": {
+		"settings": {
+			"defaults": {
+				"open-app-settings": {
+					"message": "管理默认设置"
+				}
+			},
+			"sidebar": {
+				"label": {
+					"game": {
+						"message": "游戏"
+					},
+					"instance": {
+						"message": "实例"
+					}
+				}
+			},
+			"tabs": {
+				"hooks": {
+					"default-settings-description": {
+						"message": "除非在此处覆盖，否则该实例使用默认的启动钩子。"
+					},
+					"label": {
+						"message": "启动钩子"
+					}
+				},
+				"java": {
+					"default-settings-description": {
+						"message": "除非在此处覆盖，否则该实例使用默认的 Java 与内存设置。"
+					},
+					"label": {
+						"message": "Java 与内存"
+					}
+				},
+				"syncing": {
+					"message": "同步"
+				},
+				"window": {
+					"default-settings-description": {
+						"message": "除非在此处覆盖，否则该实例使用默认的窗口设置。"
+					},
+					"label": {
+						"message": "窗口"
+					}
+				}
+			}
+		},
+		"shared-instance": {
+			"file-not-allowed": {
+				"title": {
+					"message": "不允许的文件类型"
+				}
+			},
+			"publish-review": {
+				"changes-description": {
+					"message": "查看自上次更新以来检测到的改动，推送时会自动包含这些改动。"
+				},
+				"changes-tab": {
+					"message": "改动"
+				},
+				"file-type-not-allowed": {
+					"message": "此文件类型不允许推送。"
+				},
+				"files-description": {
+					"message": "除检测到的改动外，你也可以额外选择单个文件一并发布。"
+				},
+				"files-tab": {
+					"message": "文件"
+				},
+				"storage-over-limit": {
+					"message": "超出配额 {size}，请取消选择部分文件后再推送。"
+				},
+				"storage-title": {
+					"message": "存储配额"
+				},
+				"storage-usage": {
+					"message": "{used} / {limit}"
+				}
+			}
+		}
 	},
 	"instance.action.create-shortcut": {
 		"message": "创建快捷方式"
@@ -4519,200 +4762,5 @@
 	},
 	"settings.sidebar.label.display": {
 		"message": "显示"
-	},
-	"app": {
-		"file-download": {
-			"canceling": {
-				"message": "正在取消下载…"
-			},
-			"preparing": {
-				"message": "正在准备下载…"
-			},
-			"waiting": {
-				"message": "正在等待服务器响应…"
-			}
-		},
-		"modal": {
-			"install-to-play": {
-				"unavailable-description": {
-					"message": "该服务器使用的整合包版本目前无法下载，可能已被取消发布或正在审核中。请稍后再试，或联系服务器管理员。"
-				},
-				"unavailable-header": {
-					"message": "该服务器的整合包不可用"
-				}
-			}
-		},
-		"settings": {
-			"sidebar": {
-				"label": {
-					"instance-defaults": {
-						"message": "实例默认设置"
-					},
-					"system": {
-						"message": "系统"
-					}
-				}
-			},
-			"tabs": {
-				"java-and-memory": {
-					"message": "Java 与内存"
-				},
-				"launch-hooks": {
-					"message": "启动钩子"
-				},
-				"resources": {
-					"message": "资源"
-				},
-				"syncing": {
-					"message": "同步"
-				},
-				"troubleshooting": {
-					"message": "疑难解答"
-				},
-				"window": {
-					"message": "窗口"
-				},
-				"performance": {
-					"message": "性能"
-				}
-			},
-			"troubleshooting": {
-				"clear-cache": {
-					"message": "清除缓存",
-					"confirm": {
-						"title": {
-							"message": "确定清除应用缓存？"
-						}
-					}
-				},
-				"report-ad": {
-					"copied": {
-						"message": "已复制"
-					},
-					"copy": {
-						"message": "复制广告信息"
-					},
-					"description": {
-						"message": "看到不当或令人反感的广告？在广告显示时复制其信息，并发送给 <support>Modrinth 支持团队</support>。我们会审核并移除该广告。"
-					},
-					"no-ad": {
-						"text": {
-							"message": "请等待广告加载完成后再试。"
-						},
-						"title": {
-							"message": "未找到广告"
-						}
-					},
-					"title": {
-						"message": "举报广告"
-					}
-				}
-			}
-		},
-		"shared-instance-publish": {
-			"preparing": {
-				"message": "正在准备更新…"
-			},
-			"pushed": {
-				"message": "更新已推送"
-			},
-			"uploading": {
-				"message": "正在推送更新…"
-			}
-		},
-		"performance-settings": {
-			"hardware-acceleration": {
-				"title": {
-					"message": "硬件加速"
-				},
-				"description": {
-					"message": "使用 GPU 渲染界面。如果窗口变黑、闪烁或显卡驱动崩溃，请关闭此项。"
-				},
-				"restart-hint": {
-					"message": "重启 ACL 后生效。"
-				}
-			}
-		}
-	},
-	"instance": {
-		"settings": {
-			"defaults": {
-				"open-app-settings": {
-					"message": "管理默认设置"
-				}
-			},
-			"sidebar": {
-				"label": {
-					"game": {
-						"message": "游戏"
-					},
-					"instance": {
-						"message": "实例"
-					}
-				}
-			},
-			"tabs": {
-				"hooks": {
-					"default-settings-description": {
-						"message": "除非在此处覆盖，否则该实例使用默认的启动钩子。"
-					},
-					"label": {
-						"message": "启动钩子"
-					}
-				},
-				"java": {
-					"default-settings-description": {
-						"message": "除非在此处覆盖，否则该实例使用默认的 Java 与内存设置。"
-					},
-					"label": {
-						"message": "Java 与内存"
-					}
-				},
-				"syncing": {
-					"message": "同步"
-				},
-				"window": {
-					"default-settings-description": {
-						"message": "除非在此处覆盖，否则该实例使用默认的窗口设置。"
-					},
-					"label": {
-						"message": "窗口"
-					}
-				}
-			}
-		},
-		"shared-instance": {
-			"file-not-allowed": {
-				"title": {
-					"message": "不允许的文件类型"
-				}
-			},
-			"publish-review": {
-				"changes-description": {
-					"message": "查看自上次更新以来检测到的改动，推送时会自动包含这些改动。"
-				},
-				"changes-tab": {
-					"message": "改动"
-				},
-				"file-type-not-allowed": {
-					"message": "此文件类型不允许推送。"
-				},
-				"files-description": {
-					"message": "除检测到的改动外，你也可以额外选择单个文件一并发布。"
-				},
-				"files-tab": {
-					"message": "文件"
-				},
-				"storage-over-limit": {
-					"message": "超出配额 {size}，请取消选择部分文件后再推送。"
-				},
-				"storage-title": {
-					"message": "存储配额"
-				},
-				"storage-usage": {
-					"message": "{used} / {limit}"
-				}
-			}
-		}
 	}
 }

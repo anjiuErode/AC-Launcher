@@ -328,11 +328,91 @@ fn reqwest_client_builder_with_timeout() -> reqwest::ClientBuilder {
     reqwest_client_builder().read_timeout(Duration::from_secs(30))
 }
 
+/// 代理模式
+///
+/// 默认 `Auto`：由 reqwest 自行处理（系统代理 → 环境变量），与上游行为一致
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyMode {
+	/// 自动：系统代理 + 环境变量
+	#[default]
+	Auto,
+	/// 强制直连，忽略系统代理与环境变量
+	Off,
+	/// 手动指定代理地址
+	Manual,
+}
+
+/// 代理配置，存于应用配置目录的 proxy.json
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ProxyConfig {
+	#[serde(default)]
+	pub mode: ProxyMode,
+	#[serde(default)]
+	pub url: Option<String>,
+}
+
+static PROXY_CONFIG: std::sync::RwLock<Option<ProxyConfig>> = std::sync::RwLock::new(None);
+
+/// 必须在任何 HTTP 客户端首次构建前调用（启动早期）
+pub fn set_proxy_config(config: ProxyConfig) {
+	if let Ok(mut guard) = PROXY_CONFIG.write() {
+		*guard = Some(config);
+	}
+}
+
+pub fn proxy_config() -> ProxyConfig {
+	PROXY_CONFIG
+		.read()
+		.ok()
+		.and_then(|guard| guard.clone())
+		.unwrap_or_default()
+}
+
+fn apply_proxy(
+	builder: reqwest::ClientBuilder,
+	config: &ProxyConfig,
+) -> reqwest::ClientBuilder {
+	match config.mode {
+		ProxyMode::Auto => builder,
+		ProxyMode::Off => builder.no_proxy(),
+		ProxyMode::Manual => {
+			let url = config.url.clone().unwrap_or_default();
+			if url.trim().is_empty() {
+				return builder.no_proxy();
+			}
+			match reqwest::Proxy::all(url.trim()) {
+				Ok(proxy) => builder.proxy(proxy.no_proxy(
+					// 回环地址永远直连，避免本地服务被代理劫持
+					reqwest::NoProxy::from_string("localhost,127.0.0.1,::1"),
+				)),
+				Err(err) => {
+					tracing::warn!("代理地址无效，回退为直连: {err}");
+					builder.no_proxy()
+				}
+			}
+		}
+	}
+}
+
+/// 以指定代理配置构建客户端（用于设置页的连接测试，不影响全局客户端）
+pub fn client_builder_with(config: &ProxyConfig) -> reqwest::ClientBuilder {
+	apply_proxy(
+		reqwest::Client::builder()
+			.connect_timeout(Duration::from_secs(10))
+			.user_agent(crate::launcher_user_agent()),
+		config,
+	)
+}
+
 fn reqwest_client_builder() -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .tcp_keepalive(Some(Duration::from_secs(10)))
-        .user_agent(crate::launcher_user_agent())
+	apply_proxy(
+		reqwest::Client::builder()
+			.connect_timeout(Duration::from_secs(15))
+			.tcp_keepalive(Some(Duration::from_secs(10)))
+			.user_agent(crate::launcher_user_agent()),
+		&proxy_config(),
+	)
 }
 
 pub static INSECURE_REQWEST_CLIENT: LazyLock<reqwest::Client> =

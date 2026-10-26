@@ -4,6 +4,7 @@ import {
 	CoffeeIcon,
 	EyeOffIcon,
 	GaugeIcon,
+	GlobeIcon,
 	HeartHandshakeIcon,
 	LanguagesIcon,
 	LightBulbIcon,
@@ -41,6 +42,7 @@ import FeatureFlagSettings from '@/features/settings/display/feature-flag-settin
 import FeaturesSettings from '@/features/settings/display/features-settings.vue'
 import LanguageSettings from '@/features/settings/display/language-settings.vue'
 import JavaAndMemorySettings from '@/features/settings/instance-defaults/java-and-memory-settings/index.vue'
+import NetworkSettings from '@/features/settings/system/network-settings.vue'
 import PerformanceSettings from '@/features/settings/system/performance-settings.vue'
 import LaunchHooksSettings from '@/features/settings/instance-defaults/launch-hooks-settings.vue'
 import WindowSettings from '@/features/settings/instance-defaults/window-settings.vue'
@@ -196,6 +198,15 @@ const tabs = [
 		category: tabCategories.system,
 		icon: GaugeIcon,
 		content: PerformanceSettings,
+	},
+	{
+		name: defineMessage({
+			id: 'app.settings.tabs.network',
+			defaultMessage: 'Network',
+		}),
+		category: tabCategories.system,
+		icon: GlobeIcon,
+		content: NetworkSettings,
 	},
 	{
 		name: defineMessage({

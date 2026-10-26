@@ -1,4 +1,26 @@
 {
+	"app": {
+		"settings": {
+			"tabs": {
+				"performance": {
+					"message": "Performance"
+				}
+			}
+		},
+		"performance-settings": {
+			"hardware-acceleration": {
+				"title": {
+					"message": "Hardware acceleration"
+				},
+				"description": {
+					"message": "Render the interface with the GPU. Turn this off if the window turns black, flickers, or the driver crashes."
+				},
+				"restart-hint": {
+					"message": "Changes take effect after restarting ACL."
+				}
+			}
+		}
+	},
 	"app.action-bar.downloading-java": {
 		"message": "Downloading Java {version}"
 	},
@@ -1423,6 +1445,51 @@
 	},
 	"app.navigation.next-image": {
 		"message": "Next image"
+	},
+	"app.network-settings.proxy.description": {
+		"message": "Controls how ACL reaches Modrinth and Microsoft sign-in. Keep it on automatic unless you know you need otherwise."
+	},
+	"app.network-settings.proxy.mode-auto": {
+		"message": "Automatic"
+	},
+	"app.network-settings.proxy.mode-auto-desc": {
+		"message": "Follow the system proxy, then the proxy environment variables"
+	},
+	"app.network-settings.proxy.mode-manual": {
+		"message": "Manual"
+	},
+	"app.network-settings.proxy.mode-manual-desc": {
+		"message": "Use the proxy address below"
+	},
+	"app.network-settings.proxy.mode-off": {
+		"message": "Direct connection"
+	},
+	"app.network-settings.proxy.mode-off-desc": {
+		"message": "Ignore every proxy setting and connect directly"
+	},
+	"app.network-settings.proxy.reachable": {
+		"message": "Reachable"
+	},
+	"app.network-settings.proxy.save": {
+		"message": "Save"
+	},
+	"app.network-settings.proxy.saved": {
+		"message": "Saved. Restart ACL for the new proxy setting to take effect."
+	},
+	"app.network-settings.proxy.test": {
+		"message": "Test connection"
+	},
+	"app.network-settings.proxy.test-hint": {
+		"message": "Checks Modrinth and Microsoft sign-in with the settings above, without saving them."
+	},
+	"app.network-settings.proxy.title": {
+		"message": "Network proxy"
+	},
+	"app.network-settings.proxy.unreachable": {
+		"message": "Failed"
+	},
+	"app.network-settings.proxy.url-placeholder": {
+		"message": "http://127.0.0.1:7890"
 	},
 	"app.news.title": {
 		"message": "News"
@@ -3143,6 +3210,9 @@
 	"app.settings.tabs.launch-hooks": {
 		"message": "Launch hooks"
 	},
+	"app.settings.tabs.network": {
+		"message": "Network"
+	},
 	"app.settings.tabs.privacy": {
 		"message": "Privacy"
 	},
@@ -3561,7 +3631,7 @@
 		"message": "Press <shortcut>N</shortcut> to quick create an instance"
 	},
 	"app.welcome-screen.title": {
-		"message": "Welcome to Modrinth"
+		"message": "Welcome to ACL"
 	},
 	"app.world.server-modal.placeholder-address": {
 		"message": "example.modrinth.gg"
@@ -4648,27 +4718,5 @@
 	},
 	"settings.sidebar.label.display": {
 		"message": "Display"
-	},
-	"app": {
-		"settings": {
-			"tabs": {
-				"performance": {
-					"message": "Performance"
-				}
-			}
-		},
-		"performance-settings": {
-			"hardware-acceleration": {
-				"title": {
-					"message": "Hardware acceleration"
-				},
-				"description": {
-					"message": "Render the interface with the GPU. Turn this off if the window turns black, flickers, or the driver crashes."
-				},
-				"restart-hint": {
-					"message": "Changes take effect after restarting ACL."
-				}
-			}
-		}
 	}
 }

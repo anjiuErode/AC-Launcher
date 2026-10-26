@@ -185,6 +185,116 @@ fn set_hardware_acceleration(app: tauri::AppHandle, enabled: bool) -> Result<(),
     write_hardware_acceleration(&app.config().identifier, enabled)
 }
 
+// ============ 网络代理设置 ============
+
+fn app_config_dir_for(identifier: &str) -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(|home| std::path::PathBuf::from(home).join("Library/Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".config"))
+        });
+    base.map(|dir| dir.join(identifier))
+}
+
+fn read_proxy_config(identifier: &str) -> theseus::ProxyConfig {
+    app_config_dir_for(identifier)
+        .map(|dir| dir.join("proxy.json"))
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn write_proxy_config(
+    identifier: &str,
+    config: &theseus::ProxyConfig,
+) -> Result<(), String> {
+    let dir = app_config_dir_for(identifier)
+        .ok_or_else(|| "无法定位应用配置目录".to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let raw = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("proxy.json"), raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_proxy_config(app: tauri::AppHandle) -> theseus::ProxyConfig {
+    read_proxy_config(&app.config().identifier)
+}
+
+#[tauri::command]
+fn set_proxy_config(
+    app: tauri::AppHandle,
+    mode: String,
+    url: Option<String>,
+) -> Result<(), String> {
+    let mode: theseus::ProxyMode =
+        serde_json::from_str(&format!("\"{mode}\""))
+            .map_err(|_| format!("未知的代理模式: {mode}"))?;
+    let config = theseus::ProxyConfig { mode, url };
+    write_proxy_config(&app.config().identifier, &config)?;
+    theseus::set_http_proxy_config(config);
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct NetProbe {
+    label: String,
+    url: String,
+    ok: bool,
+    status: Option<u16>,
+    millis: u64,
+    error: Option<String>,
+}
+
+/// 用给定的（尚未保存的）代理配置试连，用于设置页的「测试连接」
+#[tauri::command]
+async fn test_network(mode: String, url: Option<String>) -> Result<Vec<NetProbe>, String> {
+    let mode: theseus::ProxyMode =
+        serde_json::from_str(&format!("\"{mode}\""))
+            .map_err(|_| format!("未知的代理模式: {mode}"))?;
+    let config = theseus::ProxyConfig { mode, url };
+    let client = theseus::client_builder_with(&config)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let targets = [
+        ("Modrinth API", "https://api.modrinth.com/"),
+        ("Microsoft 登录", "https://login.live.com/"),
+    ];
+
+    let mut probes = Vec::with_capacity(targets.len());
+    for (label, target) in targets {
+        let started = std::time::Instant::now();
+        match client.get(target).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                probes.push(NetProbe {
+                    label: label.to_string(),
+                    url: target.to_string(),
+                    ok: status.is_success() || status.is_redirection(),
+                    status: Some(status.as_u16()),
+                    millis: started.elapsed().as_millis() as u64,
+                    error: None,
+                });
+            }
+            Err(err) => probes.push(NetProbe {
+                label: label.to_string(),
+                url: target.to_string(),
+                ok: false,
+                status: None,
+                millis: started.elapsed().as_millis() as u64,
+                error: Some(err.to_string()),
+            }),
+        }
+    }
+    Ok(probes)
+}
+
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -221,6 +331,11 @@ fn main() {
     let _log_guard = theseus::start_logger(&tauri_context.config().identifier);
 
     tracing::info!("Initialized tracing subscriber. Loading Modrinth App!");
+
+    // 代理配置必须在任何 HTTP 客户端首次构建前注入
+    let proxy_config = read_proxy_config(&tauri_context.config().identifier);
+    tracing::info!("Loaded network proxy preference: {:?}", proxy_config);
+    theseus::set_http_proxy_config(proxy_config);
 
     let mut builder = tauri::Builder::default();
 
@@ -415,6 +530,9 @@ fn main() {
             restart_app,
             get_hardware_acceleration,
             set_hardware_acceleration,
+            get_proxy_config,
+            set_proxy_config,
+            test_network,
         ]);
 
     tracing::info!("Initializing app...");
