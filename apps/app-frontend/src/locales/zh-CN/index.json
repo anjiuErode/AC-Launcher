@@ -593,6 +593,39 @@
 	"app.features-settings.sync-across-devices.title": {
 		"message": "跨设备同步功能"
 	},
+	"app.guild-account.description": {
+		"message": "登录后可查看公会公告、整合包与成员在线状态。与 Modrinth 账号相互独立。"
+	},
+	"app.guild-account.email": {
+		"message": "邮箱"
+	},
+	"app.guild-account.password": {
+		"message": "密码"
+	},
+	"app.guild-account.sign-in": {
+		"message": "登录"
+	},
+	"app.guild-account.sign-out": {
+		"message": "退出登录"
+	},
+	"app.guild-account.sign-up": {
+		"message": "注册"
+	},
+	"app.guild-account.signed-in-as": {
+		"message": "当前登录"
+	},
+	"app.guild-account.title": {
+		"message": "公会账号"
+	},
+	"app.guild-account.to-sign-in": {
+		"message": "已有账号？去登录"
+	},
+	"app.guild-account.to-sign-up": {
+		"message": "还没有账号？去注册"
+	},
+	"app.guild-account.working": {
+		"message": "处理中…"
+	},
 	"app.home.jump-back-in.actions.label": {
 		"message": "实例操作"
 	},
@@ -3268,6 +3301,9 @@
 	},
 	"app.settings.tabs.features": {
 		"message": "功能"
+	},
+	"app.settings.tabs.guild-account": {
+		"message": "公会账号"
 	},
 	"app.settings.tabs.java-installations": {
 		"message": "Java 管理"

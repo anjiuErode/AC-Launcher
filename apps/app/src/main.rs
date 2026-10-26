@@ -13,6 +13,7 @@ use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 
 mod api;
+mod guild;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -239,6 +240,34 @@ fn set_proxy_config(
     write_proxy_config(&app.config().identifier, &config)?;
     theseus::set_http_proxy_config(config);
     Ok(())
+}
+
+#[tauri::command]
+async fn guild_sign_in(
+    app: tauri::AppHandle,
+    email: String,
+    password: String,
+) -> Result<guild::PublicSession, String> {
+    guild::sign_in(&app.config().identifier, &email, &password).await
+}
+
+#[tauri::command]
+async fn guild_sign_up(
+    app: tauri::AppHandle,
+    email: String,
+    password: String,
+) -> Result<String, String> {
+    guild::sign_up(&app.config().identifier, &email, &password).await
+}
+
+#[tauri::command]
+async fn guild_session(app: tauri::AppHandle) -> Option<guild::PublicSession> {
+    guild::current(&app.config().identifier).await
+}
+
+#[tauri::command]
+fn guild_sign_out(app: tauri::AppHandle) -> Result<(), String> {
+    guild::sign_out(&app.config().identifier)
 }
 
 #[derive(serde::Serialize)]
@@ -533,6 +562,10 @@ fn main() {
             get_proxy_config,
             set_proxy_config,
             test_network,
+            guild_sign_in,
+            guild_sign_up,
+            guild_session,
+            guild_sign_out,
         ]);
 
     tracing::info!("Initializing app...");

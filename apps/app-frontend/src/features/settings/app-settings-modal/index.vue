@@ -13,6 +13,7 @@ import {
 	Settings2Icon,
 	ToggleRightIcon,
 	UserIcon,
+	UsersIcon,
 	WindowIcon,
 	WrenchIcon,
 } from '@modrinth/assets'
@@ -35,6 +36,7 @@ import { computed, ref } from 'vue'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import PrivacySettings from '@/features/settings/account/privacy-settings.vue'
 import ProfileSettings from '@/features/settings/account/profile-settings.vue'
+import GuildAccountSettings from '@/features/settings/account/guild-account-settings.vue'
 import SocialSettings from '@/features/settings/account/social-settings.vue'
 import AppearanceSettings from '@/features/settings/display/appearance-settings.vue'
 import BehaviorSettings from '@/features/settings/display/behavior-settings.vue'
@@ -138,6 +140,15 @@ const tabs = [
 		category: tabCategories.account,
 		icon: UserIcon,
 		content: ProfileSettings,
+	},
+	{
+		name: defineMessage({
+			id: 'app.settings.tabs.guild-account',
+			defaultMessage: 'Guild account',
+		}),
+		category: tabCategories.account,
+		icon: UsersIcon,
+		content: GuildAccountSettings,
 	},
 	{
 		name: commonSettingsMessages.social,

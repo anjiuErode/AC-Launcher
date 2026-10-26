@@ -510,6 +510,39 @@
 	"app.file-download.waiting": {
 		"message": "Waiting for the server…"
 	},
+	"app.guild-account.description": {
+		"message": "Signs you in to guild-only content: announcements, modpacks and the member list. Separate from your Modrinth account."
+	},
+	"app.guild-account.email": {
+		"message": "Email"
+	},
+	"app.guild-account.password": {
+		"message": "Password"
+	},
+	"app.guild-account.sign-in": {
+		"message": "Sign in"
+	},
+	"app.guild-account.sign-out": {
+		"message": "Sign out"
+	},
+	"app.guild-account.sign-up": {
+		"message": "Create account"
+	},
+	"app.guild-account.signed-in-as": {
+		"message": "Signed in as"
+	},
+	"app.guild-account.title": {
+		"message": "Guild account"
+	},
+	"app.guild-account.to-sign-in": {
+		"message": "Already have an account? Sign in"
+	},
+	"app.guild-account.to-sign-up": {
+		"message": "Don't have an account? Create one"
+	},
+	"app.guild-account.working": {
+		"message": "Working…"
+	},
 	"app.home.jump-back-in.actions.label": {
 		"message": "Instance actions"
 	},
@@ -3197,6 +3230,9 @@
 	},
 	"app.settings.tabs.features": {
 		"message": "Features"
+	},
+	"app.settings.tabs.guild-account": {
+		"message": "Guild account"
 	},
 	"app.settings.tabs.java-and-memory": {
 		"message": "Java and memory"

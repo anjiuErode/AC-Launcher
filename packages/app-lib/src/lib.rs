@@ -29,7 +29,7 @@ pub use event::{
 pub use logger::start_logger;
 pub use state::State;
 pub use util::fetch::DownloadReason;
-pub use util::fetch::{ProxyConfig, ProxyMode, client_builder_with, set_proxy_config as set_http_proxy_config};
+pub use util::fetch::{ProxyConfig, ProxyMode, REQWEST_CLIENT, client_builder_with, set_proxy_config as set_http_proxy_config};
 
 pub fn launcher_user_agent() -> String {
     const LAUNCHER_BASE_USER_AGENT: &str =

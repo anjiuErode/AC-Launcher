@@ -4,11 +4,9 @@ import { OverlayScrollbars } from 'overlayscrollbars'
 import { computed, onMounted, onScopeDispose, ref } from 'vue'
 
 import { useTheme } from '@/composables/use-theme'
-import PrideFundraiserBanner from '@/features/campaigns/pride-fundraiser-banner.vue'
 import FriendsList from '@/features/friends/friends-list/index.vue'
 import AccountsCard from '@/features/minecraft-accounts/accounts-card.vue'
 import type { MinecraftAccountsActions } from '@/features/minecraft-accounts/context'
-import NewsSidebar from '@/features/news/news-sidebar.vue'
 import OnboardingChecklist from '@/features/onboarding/checklist.vue'
 import type { ModrinthCredentials } from '@/helpers/mr_auth'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
@@ -135,10 +133,7 @@ const messages = defineMessages({
 							/>
 						</Suspense>
 					</div>
-					<PrideFundraiserBanner
-						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
-					/>
-					<NewsSidebar :style="promotionPaddingStyle" />
+					<!-- ACL：已移除上游的募捐横幅与新闻/推广面板（内容来自 Modrinth 远程接口） -->
 				</div>
 			</div>
 			<div
