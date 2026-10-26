@@ -9,7 +9,16 @@
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+**Current status: releases are unsigned.**
+
+An application to the [SignPath Foundation](https://signpath.org) was reviewed and declined in October 2026. The Foundation requires a project with established public visibility — stars, contributors, independent references — which this fork does not yet have. Re-application is possible once the project gains broader adoption.
+
+Because the builds are unsigned, Windows SmartScreen shows a "Windows protected your PC" dialog on first launch. To proceed:
+
+1. Click **More info**
+2. Click **Run anyway**
+
+Verify every download against the SHA-256 published in the release notes before installing. Self-signed certificates are deliberately not used: they change the warning from "unknown publisher" to "publisher not trusted", which is worse for users.
 
 - Committers and reviewers: anjiuErode
 - Approvers: anjiuErode
