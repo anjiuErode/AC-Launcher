@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 项目 URL 与 anon key 均为公开信息（受 RLS 保护），可随客户端分发
-const SUPABASE_URL: &str = "https://hehzfiafjqthetdxekxf.supabase.co";
+const SUPABASE_URL: &str = "https://guild.yingzhou1110.top";
 const SUPABASE_ANON_KEY: &str =
 	"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlaHpmaWFmanF0aGV0ZHhla3hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMDM5NzQsImV4cCI6MjEwODU3OTk3NH0.JDHuCJ89Wm5T-N_MntRIuaogV7sf2qoYl_Rf-BWvDrQ";
 
