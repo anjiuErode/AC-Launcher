@@ -242,27 +242,15 @@ fn set_proxy_config(
     Ok(())
 }
 
+/// 打开官网授权页，等待本机回环回调完成登录
 #[tauri::command]
-async fn guild_sign_in(
-    app: tauri::AppHandle,
-    email: String,
-    password: String,
-) -> Result<guild::PublicSession, String> {
-    guild::sign_in(&app.config().identifier, &email, &password).await
+async fn guild_begin_login(app: tauri::AppHandle) -> Result<guild::PublicSession, String> {
+    guild::begin_login(&app.config().identifier).await
 }
 
 #[tauri::command]
-async fn guild_sign_up(
-    app: tauri::AppHandle,
-    email: String,
-    password: String,
-) -> Result<String, String> {
-    guild::sign_up(&app.config().identifier, &email, &password).await
-}
-
-#[tauri::command]
-async fn guild_session(app: tauri::AppHandle) -> Option<guild::PublicSession> {
-    guild::current(&app.config().identifier).await
+fn guild_session(app: tauri::AppHandle) -> Option<guild::PublicSession> {
+    guild::current(&app.config().identifier)
 }
 
 #[tauri::command]
@@ -562,8 +550,7 @@ fn main() {
             get_proxy_config,
             set_proxy_config,
             test_network,
-            guild_sign_in,
-            guild_sign_up,
+            guild_begin_login,
             guild_session,
             guild_sign_out,
         ]);

@@ -5,8 +5,7 @@ import { onMounted, ref } from 'vue'
 
 interface GuildSession {
 	user_id: string
-	email: string | null
-	expires_at: number
+	name: string | null
 }
 
 const { formatMessage } = useVIntl()
@@ -19,7 +18,7 @@ const messages = defineMessages({
 	description: {
 		id: 'app.guild-account.description',
 		defaultMessage:
-			'Signs you in to guild-only content: announcements, modpacks and the member list. Separate from your Modrinth account.',
+			'Signs you in to guild-only content: announcements, modpacks and the member list. Uses your account on yingzhou1110.top, and is separate from your Modrinth account.',
 	},
 	signedInAs: {
 		id: 'app.guild-account.signed-in-as',
@@ -29,43 +28,28 @@ const messages = defineMessages({
 		id: 'app.guild-account.sign-out',
 		defaultMessage: 'Sign out',
 	},
-	email: {
-		id: 'app.guild-account.email',
-		defaultMessage: 'Email',
-	},
-	password: {
-		id: 'app.guild-account.password',
-		defaultMessage: 'Password',
-	},
 	signIn: {
 		id: 'app.guild-account.sign-in',
-		defaultMessage: 'Sign in',
+		defaultMessage: 'Sign in on the website',
 	},
-	signUp: {
-		id: 'app.guild-account.sign-up',
-		defaultMessage: 'Create account',
+	signInHint: {
+		id: 'app.guild-account.sign-in-hint',
+		defaultMessage:
+			'A browser window opens on yingzhou1110.top. Finish signing in there and return to ACL.',
 	},
-	toSignUp: {
-		id: 'app.guild-account.to-sign-up',
-		defaultMessage: "Don't have an account? Create one",
+	notSignedIn: {
+		id: 'app.guild-account.not-signed-in',
+		defaultMessage: 'Not signed in',
 	},
-	toSignIn: {
-		id: 'app.guild-account.to-sign-in',
-		defaultMessage: 'Already have an account? Sign in',
-	},
-	working: {
-		id: 'app.guild-account.working',
-		defaultMessage: 'Working…',
+	waiting: {
+		id: 'app.guild-account.waiting',
+		defaultMessage: 'Waiting for the browser…',
 	},
 })
 
 const session = ref<GuildSession | null>(null)
 const loaded = ref(false)
 const busy = ref(false)
-const mode = ref<'sign-in' | 'sign-up'>('sign-in')
-const email = ref('')
-const password = ref('')
-const notice = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 async function refresh() {
@@ -82,25 +66,11 @@ onMounted(async () => {
 	}
 })
 
-async function submit() {
+async function signIn() {
 	busy.value = true
 	error.value = null
-	notice.value = null
 	try {
-		if (mode.value === 'sign-in') {
-			session.value = await invoke<GuildSession>('guild_sign_in', {
-				email: email.value,
-				password: password.value,
-			})
-			password.value = ''
-		} else {
-			notice.value = await invoke<string>('guild_sign_up', {
-				email: email.value,
-				password: password.value,
-			})
-			password.value = ''
-			await refresh()
-		}
+		session.value = await invoke<GuildSession>('guild_begin_login')
 	} catch (err) {
 		error.value = String(err)
 	} finally {
@@ -111,7 +81,6 @@ async function submit() {
 async function signOut() {
 	busy.value = true
 	error.value = null
-	notice.value = null
 	try {
 		await invoke('guild_sign_out')
 		session.value = null
@@ -133,58 +102,21 @@ async function signOut() {
 		<div v-if="session" class="flex items-center justify-between gap-4 rounded-2xl bg-bg p-4">
 			<span class="flex flex-col">
 				<span class="text-sm text-secondary">{{ formatMessage(messages.signedInAs) }}</span>
-				<span class="font-semibold text-contrast">{{ session.email ?? session.user_id }}</span>
+				<span class="font-semibold text-contrast">{{ session.name ?? session.user_id }}</span>
 			</span>
 			<Button :disabled="busy" @click="signOut">{{ formatMessage(messages.signOut) }}</Button>
 		</div>
 
-		<form v-else class="flex flex-col gap-3 rounded-2xl bg-bg p-4" @submit.prevent="submit">
-			<label class="flex flex-col gap-1">
-				<span class="text-sm text-secondary">{{ formatMessage(messages.email) }}</span>
-				<input
-					v-model="email"
-					type="email"
-					required
-					autocomplete="username"
-					class="w-full rounded-xl bg-bg-raised px-4 py-3 text-contrast outline-none"
-				/>
-			</label>
-			<label class="flex flex-col gap-1">
-				<span class="text-sm text-secondary">{{ formatMessage(messages.password) }}</span>
-				<input
-					v-model="password"
-					type="password"
-					required
-					minlength="6"
-					autocomplete="current-password"
-					class="w-full rounded-xl bg-bg-raised px-4 py-3 text-contrast outline-none"
-				/>
-			</label>
-			<div class="flex items-center gap-2">
-				<Button :disabled="busy || !loaded" @click="submit">
-					{{
-						busy
-							? formatMessage(messages.working)
-							: mode === 'sign-in'
-								? formatMessage(messages.signIn)
-								: formatMessage(messages.signUp)
-					}}
+		<div v-else class="flex flex-col gap-3 rounded-2xl bg-bg p-4">
+			<span class="text-sm text-secondary">{{ formatMessage(messages.notSignedIn) }}</span>
+			<div class="flex items-center gap-3">
+				<Button :disabled="busy || !loaded" @click="signIn">
+					{{ busy ? formatMessage(messages.waiting) : formatMessage(messages.signIn) }}
 				</Button>
-				<button
-					type="button"
-					class="cursor-pointer border-none bg-transparent text-sm text-secondary underline"
-					@click="mode = mode === 'sign-in' ? 'sign-up' : 'sign-in'"
-				>
-					{{
-						mode === 'sign-in'
-							? formatMessage(messages.toSignUp)
-							: formatMessage(messages.toSignIn)
-					}}
-				</button>
 			</div>
-		</form>
+			<span class="text-sm text-secondary">{{ formatMessage(messages.signInHint) }}</span>
+		</div>
 
-		<p v-if="notice" class="m-0 text-sm text-secondary">{{ notice }}</p>
 		<p v-if="error" class="m-0 text-sm text-red">{{ error }}</p>
 	</div>
 </template>

@@ -586,6 +586,10 @@ const messages = defineMessages({
 		id: 'friends.action.add-friend',
 		defaultMessage: 'Add a friend',
 	},
+	guildSignIn: {
+		id: 'app.nav.sign-in-guild-account',
+		defaultMessage: 'Sign in to guild account',
+	},
 	signInToModrinthAccount: {
 		id: 'app.nav.sign-in-to-modrinth-account',
 		defaultMessage: 'Sign into Modrinth',
@@ -1962,6 +1966,32 @@ function handleContextMenu(event) {
 }
 
 provideAppUpdateDownloadProgress(appUpdateDownload)
+
+// 公会账号：通过官网授权页登录（浏览器 + 本机回环回调）
+const guildSession = ref(null)
+const guildBusy = ref(false)
+
+async function refreshGuildSession() {
+	try {
+		guildSession.value = await invoke('guild_session')
+	} catch {
+		guildSession.value = null
+	}
+}
+
+async function beginGuildLogin() {
+	guildBusy.value = true
+	try {
+		guildSession.value = await invoke('guild_begin_login')
+	} catch (err) {
+		console.error('guild login failed', err)
+	} finally {
+		guildBusy.value = false
+	}
+}
+
+onMounted(refreshGuildSession)
+
 </script>
 
 <template>
@@ -2092,58 +2122,20 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 			>
 				<SpinnerIcon class="animate-spin" />
 			</IconButton>
-			<TeleportOverflowMenu
-				v-else-if="credentials?.user"
-				v-tooltip.right="profileButtonTooltip"
-				type="quiet"
-				size="xl"
-				:label="formatMessage(messages.modrinthAccount)"
-				:options="modrinthAccountMenuOptions"
-				placement="right-end"
-				:distance="4"
-				class="brightness-100 hover:!brightness-100 focus-visible:!brightness-100"
+			<NavButton
+				v-if="!guildSession"
+				v-tooltip.right="formatMessage(messages.guildSignIn)"
+				:to="() => beginGuildLogin()"
+				:disabled="guildBusy"
 			>
-				<Avatar
-					:src="credentials?.user?.avatar_url"
-					alt=""
-					size="32px"
-					circle
-					no-shadow
-					class="pointer-events-none !size-8"
-				/>
-				<template
-					v-for="account in accountSwitcherAccounts"
-					:key="account.user_id"
-					#[account.optionId]
-				>
-					<Avatar :src="account.user.avatar_url" size="1.25rem" aria-hidden="true" circle />
-					{{ account.user.username }}
-					<UserRoleIcon :role="account.user.role" />
-				</template>
-			</TeleportOverflowMenu>
-			<TeleportOverflowMenu
-				v-else-if="accountSwitcherAccounts.length > 0"
-				v-tooltip.right="profileButtonTooltip"
-				type="quiet"
-				size="xl"
-				:label="formatMessage(messages.signInToModrinthAccount)"
-				:options="accountSwitcherOptions"
-				placement="right-end"
-				:distance="4"
-			>
-				<LogInIcon class="!text-brand" />
-				<template
-					v-for="account in accountSwitcherAccounts"
-					:key="account.user_id"
-					#[account.optionId]
-				>
-					<Avatar :src="account.user.avatar_url" size="1.25rem" aria-hidden="true" circle />
-					{{ account.user.username }}
-					<UserRoleIcon :role="account.user.role" />
-				</template>
-			</TeleportOverflowMenu>
-			<NavButton v-else v-tooltip.right="profileButtonTooltip" :to="() => requestSignIn()">
 				<LogInIcon class="text-brand" />
+			</NavButton>
+			<NavButton
+				v-else
+				v-tooltip.right="guildSession.name ?? guildSession.user_id"
+				:to="() => settingsActions.openSettings()"
+			>
+				<UserIcon class="text-brand" />
 			</NavButton>
 		</div>
 		<AppTitleBar
