@@ -272,6 +272,15 @@ async fn guild_announcements(
     guild::fetch_announcements(&app.config().identifier, limit).await
 }
 
+/// 读取附件文本内容，供界面内联预览（不需要令牌）
+#[tauri::command]
+async fn guild_attachment_text(
+    news_id: String,
+    attachment_id: String,
+) -> Result<String, guild::GuildApiError> {
+    guild::fetch_attachment_text(&news_id, &attachment_id).await
+}
+
 #[tauri::command]
 async fn guild_packs(
     app: tauri::AppHandle,
@@ -582,6 +591,7 @@ fn main() {
             guild_sign_out,
             guild_me,
             guild_announcements,
+            guild_attachment_text,
             guild_packs,
             guild_servers,
         ]);

@@ -647,8 +647,20 @@
 	"app.guild-account.working": {
 		"message": "处理中…"
 	},
+	"app.guild.attachment.hide": {
+		"message": "收起预览"
+	},
 	"app.guild.attachment.open": {
-		"message": "打开"
+		"message": "在浏览器打开"
+	},
+	"app.guild.attachment.preview": {
+		"message": "预览"
+	},
+	"app.guild.attachment.preview-failed": {
+		"message": "该附件无法在此预览"
+	},
+	"app.guild.attachment.preview-loading": {
+		"message": "正在加载…"
 	},
 	"app.guild.attachment.title": {
 		"message": "附件"

@@ -63,6 +63,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter @modrinth/app run tauri build --config tauri-release.conf.json --bundles nsis
 
       - name: Collect artifacts
@@ -71,7 +74,13 @@ jobs:
           New-Item -ItemType Directory -Path out -Force | Out-Null
           Copy-Item target/release/ACL.exe out/
           Copy-Item target/release/bundle/nsis/*.exe out/ -ErrorAction SilentlyContinue
+          Copy-Item target/release/bundle/nsis/*.nsis.zip out/ -ErrorAction SilentlyContinue
+          Copy-Item target/release/bundle/nsis/*.sig out/ -ErrorAction SilentlyContinue
+          Copy-Item target/release/bundle/nsis/latest.json out/ -ErrorAction SilentlyContinue
           Get-ChildItem out | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+          if (-not (Test-Path out/ACL_*_x64-setup.nsis.zip)) {
+            Write-Error "missing updater artifact: .nsis.zip was not generated (signing key not applied?)"
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -425,6 +425,62 @@ pub async fn fetch_announcements(
 	Ok(body.items)
 }
 
+/// 附件文本内容上限：再大就不该在公告卡里内联，交给浏览器打开
+const ATTACHMENT_TEXT_LIMIT: usize = 1024 * 1024;
+
+/// 只接受安全字符，避免把参数拼进路径时注入别的地址
+fn safe_segment(value: &str) -> Result<&str, GuildApiError> {
+	if value.is_empty()
+		|| value.len() > 128
+		|| !value
+			.chars()
+			.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+	{
+		return Err(api_error("bad_request", "附件地址不合法"));
+	}
+	Ok(value)
+}
+
+/// 读取附件文本（Markdown / 纯文本），供界面内联预览。
+///
+/// 附件下载地址是公开的，不需要令牌；这里仍然在 Rust 侧请求，
+/// 避免 webview 直连时被 CORS 拦住。
+pub async fn fetch_attachment_text(
+	news_id: &str,
+	attachment_id: &str,
+) -> Result<String, GuildApiError> {
+	let news_id = safe_segment(news_id)?;
+	let attachment_id = safe_segment(attachment_id)?;
+	let url = format!(
+		"{API_BASE}/api/news/{news_id}/attachments/{attachment_id}?inline=1"
+	);
+
+	let response = theseus::REQWEST_CLIENT
+		.get(url)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法读取附件：{err}")))?;
+
+	let status = response.status();
+	if !status.is_success() {
+		return Err(api_error(
+			"server",
+			format!("官网返回 {status}，附件可能已被删除"),
+		));
+	}
+
+	let bytes = response
+		.bytes()
+		.await
+		.map_err(|err| api_error("network", format!("读取附件内容失败：{err}")))?;
+	if bytes.len() > ATTACHMENT_TEXT_LIMIT {
+		return Err(api_error("too_large", "附件太大，请用浏览器打开"));
+	}
+	// 文本附件不保证是合法 UTF-8，坏字节按替换字符显示，总比整块失败好
+	Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 pub async fn fetch_packs(identifier: &str) -> Result<Vec<GuildPack>, GuildApiError> {
 	let body: Items<GuildPack> = get_json(identifier, "/api/guild/packs").await?;
 	Ok(body.items)

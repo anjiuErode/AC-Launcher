@@ -33,6 +33,7 @@ import { computed, ref } from 'vue'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import GuildAccountSettings from '@/features/settings/account/guild-account-settings.vue'
+import PrivacySettings from '@/features/settings/account/privacy-settings.vue'
 import AppearanceSettings from '@/features/settings/display/appearance-settings.vue'
 import BehaviorSettings from '@/features/settings/display/behavior-settings.vue'
 import FeatureFlagSettings from '@/features/settings/display/feature-flag-settings.vue'
