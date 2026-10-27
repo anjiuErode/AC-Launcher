@@ -74,12 +74,11 @@ jobs:
           New-Item -ItemType Directory -Path out -Force | Out-Null
           Copy-Item target/release/ACL.exe out/
           Copy-Item target/release/bundle/nsis/*.exe out/ -ErrorAction SilentlyContinue
-          Copy-Item target/release/bundle/nsis/*.nsis.zip out/ -ErrorAction SilentlyContinue
+          # Tauri v2 的 NSIS 更新包就是安装器本身 + 同名 .sig（没有 .nsis.zip，那是 v1 的形态）
           Copy-Item target/release/bundle/nsis/*.sig out/ -ErrorAction SilentlyContinue
-          Copy-Item target/release/bundle/nsis/latest.json out/ -ErrorAction SilentlyContinue
           Get-ChildItem out | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
-          if (-not (Test-Path out/ACL_*_x64-setup.nsis.zip)) {
-            Write-Error "missing updater artifact: .nsis.zip was not generated (signing key not applied?)"
+          if (-not (Test-Path out/ACL_*_x64-setup.exe.sig)) {
+            Write-Error "missing updater signature: *.exe.sig was not generated (signing key not applied?)"
           }
 
       - name: Upload artifacts
