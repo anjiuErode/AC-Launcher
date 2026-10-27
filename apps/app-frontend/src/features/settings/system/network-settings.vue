@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button, defineMessages, useVIntl } from '@modrinth/ui'
 import { invoke } from '@tauri-apps/api/core'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 type ProxyMode = 'auto' | 'off' | 'manual'
 
@@ -75,6 +75,34 @@ const messages = defineMessages({
 		id: 'app.network-settings.proxy.saved',
 		defaultMessage: 'Saved. Restart ACL for the new proxy setting to take effect.',
 	},
+	current: {
+		id: 'app.network-settings.proxy.current',
+		defaultMessage: 'Currently in effect',
+	},
+	pendingRestart: {
+		id: 'app.network-settings.proxy.pending-restart',
+		defaultMessage: 'Changed settings take effect after restarting ACL.',
+	},
+	unsavedChanges: {
+		id: 'app.network-settings.proxy.unsaved-changes',
+		defaultMessage: 'Unsaved changes',
+	},
+	currentAuto: {
+		id: 'app.network-settings.proxy.current-auto',
+		defaultMessage: 'Automatic · follow system proxy, then environment variables',
+	},
+	currentOff: {
+		id: 'app.network-settings.proxy.current-off',
+		defaultMessage: 'Direct connection · all proxies ignored',
+	},
+	currentManual: {
+		id: 'app.network-settings.proxy.current-manual',
+		defaultMessage: 'Manual · {url}',
+	},
+	currentManualEmpty: {
+		id: 'app.network-settings.proxy.current-manual-empty',
+		defaultMessage: 'Manual · no address set',
+	},
 	reachable: {
 		id: 'app.network-settings.proxy.reachable',
 		defaultMessage: 'Reachable',
@@ -91,6 +119,28 @@ const loaded = ref(false)
 const testing = ref(false)
 const probes = ref<NetProbe[]>([])
 const message = ref<string | null>(null)
+/** 已保存到磁盘的配置；与表单分开，用来显示「当前生效」 */
+const savedConfig = ref<ProxyConfig | null>(null)
+
+const currentLabel = computed(() => {
+	const config = savedConfig.value
+	if (!config) return ''
+	if (config.mode === 'manual') {
+		return config.url
+			? formatMessage(messages.currentManual, { url: config.url })
+			: formatMessage(messages.currentManualEmpty)
+	}
+	return config.mode === 'off'
+		? formatMessage(messages.currentOff)
+		: formatMessage(messages.currentAuto)
+})
+
+const hasUnsavedChanges = computed(() => {
+	const config = savedConfig.value
+	if (!config) return false
+	const { mode: nextMode, url: nextUrl } = payload()
+	return config.mode !== nextMode || (config.url ?? '') !== (nextUrl ?? '')
+})
 
 function payload(): { mode: ProxyMode; url: string | null } {
 	return { mode: mode.value, url: mode.value === 'manual' ? url.value.trim() : null }
@@ -101,6 +151,7 @@ onMounted(async () => {
 		const config = await invoke<ProxyConfig>('get_proxy_config')
 		mode.value = config.mode ?? 'auto'
 		url.value = config.url ?? ''
+		savedConfig.value = { mode: mode.value, url: config.url ?? null }
 	} catch (err) {
 		message.value = String(err)
 	} finally {
@@ -124,6 +175,7 @@ async function save() {
 	try {
 		const { mode: nextMode, url: nextUrl } = payload()
 		await invoke('set_proxy_config', { mode: nextMode, url: nextUrl })
+		savedConfig.value = { mode: nextMode, url: nextUrl }
 		message.value = formatMessage(messages.saved)
 	} catch (err) {
 		message.value = String(err)
@@ -136,6 +188,17 @@ async function save() {
 		<div class="flex flex-col gap-2">
 			<span class="text-lg font-semibold text-contrast">{{ formatMessage(messages.title) }}</span>
 			<span class="text-secondary">{{ formatMessage(messages.description) }}</span>
+		</div>
+
+		<div class="flex flex-col gap-1 rounded-2xl bg-bg-raised p-4">
+			<span class="text-sm text-secondary">{{ formatMessage(messages.current) }}</span>
+			<span class="font-semibold text-contrast">{{ currentLabel }}</span>
+			<span v-if="hasUnsavedChanges" class="text-sm text-brand">
+				{{ formatMessage(messages.unsavedChanges) }}
+			</span>
+			<span class="text-sm text-secondary">
+				{{ formatMessage(messages.pendingRestart) }}
+			</span>
 		</div>
 
 		<div class="flex flex-col gap-2">

@@ -12,10 +12,9 @@ import type { ModrinthCredentials } from '@/helpers/mr_auth'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
 
 
-const props = defineProps<{
+defineProps<{
 	credentials: ModrinthCredentials | null | undefined
 	hasPlus: boolean
-	showAd: boolean
 	visible: boolean
 	requestSignIn: () => void
 }>()
@@ -33,10 +32,6 @@ const accounts = ref<InstanceType<typeof AccountsCard> | null>(null)
 const friends = ref<InstanceType<typeof FriendsList> | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 const scrollViewport = ref<HTMLElement | null>(null)
-const upgradeHeight = ref(0)
-const promotionPaddingStyle = computed(() =>
-	props.showAd ? { paddingBottom: `calc(1rem + ${upgradeHeight.value}px)` } : undefined,
-)
 const { showTopFade, showBottomFade, checkScrollState } = useScrollIndicator(scrollViewport)
 
 let removeScrollbarListener: (() => void) | undefined
@@ -103,11 +98,7 @@ const messages = defineMessages({
 					@login-minecraft="accounts?.login()"
 					@login-modrinth="emit('login-modrinth')"
 				/>
-				<div
-					id="sidebar-teleport-target"
-					class="sidebar-teleport-content empty:hidden"
-					:style="promotionPaddingStyle"
-				></div>
+				<div id="sidebar-teleport-target" class="sidebar-teleport-content empty:hidden"></div>
 				<div class="sidebar-default-content hidden" :class="{ 'sidebar-enabled': visible }">
 					<div
 						v-show="hasLoggedIntoMinecraft"
@@ -142,7 +133,7 @@ const messages = defineMessages({
 			/>
 			<div
 				class="sidebar-scroll-fade pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 transition-opacity duration-200 motion-reduce:transition-none"
-				:class="showAd || showBottomFade ? 'opacity-100' : 'opacity-0'"
+				:class="showBottomFade ? 'opacity-100' : 'opacity-0'"
 				aria-hidden="true"
 			/>
 		</div>

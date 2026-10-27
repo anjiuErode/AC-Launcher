@@ -5,14 +5,12 @@ import {
 	EyeOffIcon,
 	GaugeIcon,
 	GlobeIcon,
-	HeartHandshakeIcon,
 	LanguagesIcon,
 	LightBulbIcon,
 	PaintbrushIcon,
 	RefreshCwIcon,
 	Settings2Icon,
 	ToggleRightIcon,
-	UserIcon,
 	UsersIcon,
 	WindowIcon,
 	WrenchIcon,
@@ -34,22 +32,19 @@ import { platform as getOsPlatform, version as getOsVersion } from '@tauri-apps/
 import { computed, ref } from 'vue'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
-import PrivacySettings from '@/features/settings/account/privacy-settings.vue'
-import ProfileSettings from '@/features/settings/account/profile-settings.vue'
 import GuildAccountSettings from '@/features/settings/account/guild-account-settings.vue'
-import SocialSettings from '@/features/settings/account/social-settings.vue'
 import AppearanceSettings from '@/features/settings/display/appearance-settings.vue'
 import BehaviorSettings from '@/features/settings/display/behavior-settings.vue'
 import FeatureFlagSettings from '@/features/settings/display/feature-flag-settings.vue'
 import FeaturesSettings from '@/features/settings/display/features-settings.vue'
 import LanguageSettings from '@/features/settings/display/language-settings.vue'
 import JavaAndMemorySettings from '@/features/settings/instance-defaults/java-and-memory-settings/index.vue'
-import NetworkSettings from '@/features/settings/system/network-settings.vue'
-import PerformanceSettings from '@/features/settings/system/performance-settings.vue'
 import LaunchHooksSettings from '@/features/settings/instance-defaults/launch-hooks-settings.vue'
 import WindowSettings from '@/features/settings/instance-defaults/window-settings.vue'
 import type { InstanceDefaultsTab } from '@/features/settings/settings-actions'
 import SyncingSettings from '@/features/settings/syncing/syncing-settings.vue'
+import NetworkSettings from '@/features/settings/system/network-settings.vue'
+import PerformanceSettings from '@/features/settings/system/performance-settings.vue'
 import ResourceManagementSettings from '@/features/settings/system/resource-management-settings/index.vue'
 import TroubleshootingSettings from '@/features/settings/system/troubleshooting-settings.vue'
 import { appSettingsKeys, appSettingsQueryOptions, set } from '@/helpers/settings.ts'
@@ -136,12 +131,6 @@ const tabs = [
 		developerOnly: true,
 	},
 	{
-		name: commonSettingsMessages.profile,
-		category: tabCategories.account,
-		icon: UserIcon,
-		content: ProfileSettings,
-	},
-	{
 		name: defineMessage({
 			id: 'app.settings.tabs.guild-account',
 			defaultMessage: 'Guild account',
@@ -149,12 +138,6 @@ const tabs = [
 		category: tabCategories.account,
 		icon: UsersIcon,
 		content: GuildAccountSettings,
-	},
-	{
-		name: commonSettingsMessages.social,
-		category: tabCategories.account,
-		icon: HeartHandshakeIcon,
-		content: SocialSettings,
 	},
 	{
 		name: defineMessage({
@@ -296,14 +279,6 @@ function show() {
 	modal.value?.show()
 }
 
-function showProfile(): void {
-	const profileTabIndex = availableTabs.value.findIndex((tab) => tab.content === ProfileSettings)
-	if (profileTabIndex >= 0) {
-		modal.value?.setTab(profileTabIndex)
-	}
-	modal.value?.show()
-}
-
 function showFeatureFlags(): void {
 	const featureFlagsTabIndex = availableTabs.value.findIndex(
 		(tab) => tab.content === FeatureFlagSettings,
@@ -337,7 +312,7 @@ function showInstanceDefaults(tab: InstanceDefaultsTab): void {
 	modal.value?.show()
 }
 
-defineExpose({ show, showProfile, showFeatureFlags, showSyncedOptions, showInstanceDefaults })
+defineExpose({ show, showFeatureFlags, showSyncedOptions, showInstanceDefaults })
 
 const { progress, version: downloadingVersion } = injectAppUpdateDownloadProgress()
 

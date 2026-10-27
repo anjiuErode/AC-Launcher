@@ -516,14 +516,23 @@
 	"app.guild-account.email": {
 		"message": "Email"
 	},
+	"app.guild-account.not-signed-in": {
+		"message": "Not signed in"
+	},
 	"app.guild-account.password": {
 		"message": "Password"
 	},
 	"app.guild-account.sign-in": {
 		"message": "Sign in"
 	},
+	"app.guild-account.sign-in-hint": {
+		"message": "A browser window opens on yingzhou1110.top. Finish signing in there and return to ACL."
+	},
 	"app.guild-account.sign-out": {
 		"message": "Sign out"
+	},
+	"app.guild-account.sign-out-failed": {
+		"message": "Failed to sign out, please try again"
 	},
 	"app.guild-account.sign-up": {
 		"message": "Create account"
@@ -540,8 +549,92 @@
 	"app.guild-account.to-sign-up": {
 		"message": "Don't have an account? Create one"
 	},
+	"app.guild-account.waiting": {
+		"message": "Waiting for the browser…"
+	},
 	"app.guild-account.working": {
 		"message": "Working…"
+	},
+	"app.guild.attachment.open": {
+		"message": "Open"
+	},
+	"app.guild.attachment.title": {
+		"message": "Attachments"
+	},
+	"app.guild.empty.announcements": {
+		"message": "No announcements yet"
+	},
+	"app.guild.empty.packs": {
+		"message": "No modpacks yet"
+	},
+	"app.guild.empty.servers": {
+		"message": "No servers yet"
+	},
+	"app.guild.loading": {
+		"message": "Loading…"
+	},
+	"app.guild.pack.checksum": {
+		"message": "SHA-256"
+	},
+	"app.guild.pack.download": {
+		"message": "Download"
+	},
+	"app.guild.pack.size": {
+		"message": "Size"
+	},
+	"app.guild.pinned": {
+		"message": "Pinned"
+	},
+	"app.guild.refresh": {
+		"message": "Refresh"
+	},
+	"app.guild.retry": {
+		"message": "Retry"
+	},
+	"app.guild.role.admin": {
+		"message": "Admin"
+	},
+	"app.guild.role.member": {
+		"message": "Member"
+	},
+	"app.guild.server.copied": {
+		"message": "Copied"
+	},
+	"app.guild.server.copy": {
+		"message": "Copy address"
+	},
+	"app.guild.server.whitelist": {
+		"message": "Whitelist required"
+	},
+	"app.guild.sign-in": {
+		"message": "Sign in to guild account"
+	},
+	"app.guild.signed-out-description": {
+		"message": "Sign in with your yingzhou1110.top account to read guild announcements and get the modpacks and servers."
+	},
+	"app.guild.signed-out-title": {
+		"message": "Not signed in to the guild"
+	},
+	"app.guild.subtitle": {
+		"message": "Announcements, modpacks and servers of the guild."
+	},
+	"app.guild.tab.announcements": {
+		"message": "Announcements"
+	},
+	"app.guild.tab.packs": {
+		"message": "Modpacks"
+	},
+	"app.guild.tab.servers": {
+		"message": "Servers"
+	},
+	"app.guild.title": {
+		"message": "Guild"
+	},
+	"app.guild.unavailable": {
+		"message": "Guild data is temporarily unavailable"
+	},
+	"app.guild.waiting": {
+		"message": "Waiting for the browser…"
 	},
 	"app.home.jump-back-in.actions.label": {
 		"message": "Instance actions"
@@ -1437,6 +1530,9 @@
 	"app.nav.create-new-instance": {
 		"message": "Create new instance"
 	},
+	"app.nav.guild": {
+		"message": "Guild"
+	},
 	"app.nav.home": {
 		"message": "Home"
 	},
@@ -1454,6 +1550,9 @@
 	},
 	"app.nav.screenshots": {
 		"message": "Screenshots"
+	},
+	"app.nav.sign-in-guild-account": {
+		"message": "Sign in to guild account"
 	},
 	"app.nav.sign-in-to-modrinth-account": {
 		"message": "Sign into Modrinth"
@@ -1479,6 +1578,21 @@
 	"app.navigation.next-image": {
 		"message": "Next image"
 	},
+	"app.network-settings.proxy.current": {
+		"message": "Currently in effect"
+	},
+	"app.network-settings.proxy.current-auto": {
+		"message": "Automatic · follow system proxy, then environment variables"
+	},
+	"app.network-settings.proxy.current-manual": {
+		"message": "Manual · {url}"
+	},
+	"app.network-settings.proxy.current-manual-empty": {
+		"message": "Manual · no address set"
+	},
+	"app.network-settings.proxy.current-off": {
+		"message": "Direct connection · all proxies ignored"
+	},
 	"app.network-settings.proxy.description": {
 		"message": "Controls how ACL reaches Modrinth and Microsoft sign-in. Keep it on automatic unless you know you need otherwise."
 	},
@@ -1499,6 +1613,9 @@
 	},
 	"app.network-settings.proxy.mode-off-desc": {
 		"message": "Ignore every proxy setting and connect directly"
+	},
+	"app.network-settings.proxy.pending-restart": {
+		"message": "Changed settings take effect after restarting ACL."
 	},
 	"app.network-settings.proxy.reachable": {
 		"message": "Reachable"
@@ -1521,6 +1638,9 @@
 	"app.network-settings.proxy.unreachable": {
 		"message": "Failed"
 	},
+	"app.network-settings.proxy.unsaved-changes": {
+		"message": "Unsaved changes"
+	},
 	"app.network-settings.proxy.url-placeholder": {
 		"message": "http://127.0.0.1:7890"
 	},
@@ -1532,6 +1652,15 @@
 	},
 	"app.notification.warning": {
 		"message": "Warning"
+	},
+	"app.performance-settings.hardware-acceleration.description": {
+		"message": "Render the interface with the GPU. Turn this off if the window turns black, flickers, or the driver crashes."
+	},
+	"app.performance-settings.hardware-acceleration.restart-hint": {
+		"message": "Changes take effect after restarting ACL."
+	},
+	"app.performance-settings.hardware-acceleration.title": {
+		"message": "Hardware acceleration"
 	},
 	"app.project.actions.label": {
 		"message": "Project actions"
@@ -3248,6 +3377,9 @@
 	},
 	"app.settings.tabs.network": {
 		"message": "Network"
+	},
+	"app.settings.tabs.performance": {
+		"message": "Performance"
 	},
 	"app.settings.tabs.privacy": {
 		"message": "Privacy"

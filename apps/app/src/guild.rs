@@ -10,7 +10,11 @@
 //! 5. 启动器校验 state，保存会话，页面提示可关闭
 //!
 //! 令牌不进入 webview，前端只拿得到显示名与用户 ID。
+//!
+//! 本模块同时承担 `/api/guild/*` 数据接口的调用：同样在 Rust 侧发起，
+//! 界面只拿到解析后的数据，令牌不经过界面层。
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -267,4 +271,166 @@ pub fn current(identifier: &str) -> Option<PublicSession> {
 
 pub fn sign_out(identifier: &str) -> Result<(), String> {
 	clear_session(identifier)
+}
+
+// ============ 公会数据接口（/api/guild/*） ============
+//
+// 令牌不下发到 webview：所有数据请求都在 Rust 侧发起，前端只拿到解析后的数据。
+// 契约：`docs-acl/guild-api-contract.md` v1；服务端实现见官网 `functions/api/_guild.js`。
+
+/// 官网根地址（与授权页同源）
+const API_BASE: &str = "https://yingzhou1110.top";
+/// 单次请求上限，避免代理异常时界面无限转圈
+const API_TIMEOUT_SECS: u64 = 15;
+
+/// 前端可判别的错误。`code` 决定界面提示「重新登录」还是「数据暂时不可用」。
+#[derive(Debug, Serialize)]
+pub struct GuildApiError {
+	pub code: &'static str,
+	pub message: String,
+}
+
+fn api_error(code: &'static str, message: impl Into<String>) -> GuildApiError {
+	GuildApiError {
+		code,
+		message: message.into(),
+	}
+}
+
+/// 服务端形如 `{ "items": [...] }` 的列表响应
+#[derive(Debug, Deserialize)]
+struct Items<T> {
+	items: Vec<T>,
+}
+
+/// `GET /api/guild/me`
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildMe {
+	/// studio_users.id（UUID 文本，契约示例写的是整数，以服务端实际值为准）
+	pub user_id: String,
+	pub username: String,
+	/// `user` / `admin`
+	pub role: String,
+	pub joined_at: Option<String>,
+}
+
+/// 公告附件（元数据；文件内容走官网公开下载地址，不需要令牌）
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildAttachment {
+	pub id: serde_json::Value,
+	pub name: String,
+	pub size: u64,
+	pub mime: String,
+}
+
+/// 公告。数据源是官网 `news` 表，字段语义随站内新闻保持一致。
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildAnnouncement {
+	/// 类型随数据源（news 表 id 可能是数字或文本），界面只当列表标识用
+	pub id: serde_json::Value,
+	pub title: String,
+	pub body: String,
+	pub pinned: bool,
+	pub published_at: Option<String>,
+	pub author: String,
+	/// 老接口没有这个字段，缺省按无附件处理
+	#[serde(default)]
+	pub attachments: Vec<GuildAttachment>,
+}
+
+/// 整合包。`sha256` 由服务端转大写，缺失时为空串。
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildPack {
+	pub id: serde_json::Value,
+	pub name: String,
+	pub mc_version: String,
+	pub loader: String,
+	pub description: String,
+	pub url: String,
+	pub sha256: String,
+	pub size_bytes: u64,
+}
+
+/// 服务器。服务端已过滤 host 带端口/协议、port 越界的脏行。
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildServer {
+	pub id: serde_json::Value,
+	pub name: String,
+	pub host: String,
+	/// 用 u32 而非 u16：脏数据不该让整个列表解析失败
+	pub port: u32,
+	pub description: String,
+	pub whitelist_required: bool,
+}
+
+async fn get_json<T: DeserializeOwned>(
+	identifier: &str,
+	path: &str,
+) -> Result<T, GuildApiError> {
+	let session = read_session(identifier)
+		.ok_or_else(|| api_error("not_signed_in", "尚未登录公会账号"))?;
+
+	let response = theseus::REQWEST_CLIENT
+		.get(format!("{API_BASE}{path}"))
+		.header("x-studio-token", &session.token)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法连接官网：{err}")))?;
+
+	let status = response.status();
+	if status.as_u16() == 401 {
+		// 契约：401 一律视为会话失效，清掉本地登录态让用户重新登录
+		let _ = clear_session(identifier);
+		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
+	}
+
+	let body = response
+		.text()
+		.await
+		.map_err(|err| api_error("network", format!("读取官网响应失败：{err}")))?;
+
+	if !status.is_success() {
+		let message = serde_json::from_str::<serde_json::Value>(&body)
+			.ok()
+			.and_then(|value| {
+				value
+					.get("error")
+					.and_then(|error| error.as_str())
+					.map(str::to_string)
+			})
+			.unwrap_or_else(|| format!("官网返回 {status}"));
+		return Err(api_error("server", message));
+	}
+
+	serde_json::from_str(&body)
+		.map_err(|err| api_error("bad_response", format!("官网数据格式异常：{err}")))
+}
+
+pub async fn fetch_me(identifier: &str) -> Result<GuildMe, GuildApiError> {
+	get_json(identifier, "/api/guild/me").await
+}
+
+pub async fn fetch_announcements(
+	identifier: &str,
+	limit: Option<u32>,
+) -> Result<Vec<GuildAnnouncement>, GuildApiError> {
+	// 与服务端一致：默认 20，上限 50
+	let limit = limit.unwrap_or(20).clamp(1, 50);
+	let body: Items<GuildAnnouncement> = get_json(
+		identifier,
+		&format!("/api/guild/announcements?limit={limit}"),
+	)
+	.await?;
+	Ok(body.items)
+}
+
+pub async fn fetch_packs(identifier: &str) -> Result<Vec<GuildPack>, GuildApiError> {
+	let body: Items<GuildPack> = get_json(identifier, "/api/guild/packs").await?;
+	Ok(body.items)
+}
+
+pub async fn fetch_servers(identifier: &str) -> Result<Vec<GuildServer>, GuildApiError> {
+	let body: Items<GuildServer> = get_json(identifier, "/api/guild/servers").await?;
+	Ok(body.items)
 }

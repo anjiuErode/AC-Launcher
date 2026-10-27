@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { Button, defineMessages, useVIntl } from '@modrinth/ui'
-import { invoke } from '@tauri-apps/api/core'
 import { onMounted, ref } from 'vue'
 
-interface GuildSession {
-	user_id: string
-	name: string | null
-}
+import { describeGuildError, useGuildSession } from '@/composables/use-guild-session'
 
 const { formatMessage } = useVIntl()
 
@@ -45,49 +41,42 @@ const messages = defineMessages({
 		id: 'app.guild-account.waiting',
 		defaultMessage: 'Waiting for the browser…',
 	},
+	signOutFailed: {
+		id: 'app.guild-account.sign-out-failed',
+		defaultMessage: 'Failed to sign out, please try again',
+	},
 })
 
-const session = ref<GuildSession | null>(null)
-const loaded = ref(false)
-const busy = ref(false)
+// 与侧边栏、公会页共用同一份会话状态
+const {
+	session,
+	busy,
+	loaded,
+	signInError,
+	refresh,
+	signIn: signInFlow,
+	signOut: signOutFlow,
+} = useGuildSession()
+
 const error = ref<string | null>(null)
 
-async function refresh() {
-	session.value = await invoke<GuildSession | null>('guild_session')
-}
-
 onMounted(async () => {
-	try {
-		await refresh()
-	} catch (err) {
-		error.value = String(err)
-	} finally {
-		loaded.value = true
-	}
+	await refresh()
+	error.value = signInError.value
 })
 
 async function signIn() {
-	busy.value = true
 	error.value = null
-	try {
-		session.value = await invoke<GuildSession>('guild_begin_login')
-	} catch (err) {
-		error.value = String(err)
-	} finally {
-		busy.value = false
-	}
+	if (await signInFlow()) return
+	error.value = signInError.value
 }
 
 async function signOut() {
-	busy.value = true
 	error.value = null
 	try {
-		await invoke('guild_sign_out')
-		session.value = null
+		await signOutFlow()
 	} catch (err) {
-		error.value = String(err)
-	} finally {
-		busy.value = false
+		error.value = describeGuildError(err, formatMessage(messages.signOutFailed))
 	}
 }
 </script>

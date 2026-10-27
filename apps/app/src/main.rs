@@ -258,6 +258,34 @@ fn guild_sign_out(app: tauri::AppHandle) -> Result<(), String> {
     guild::sign_out(&app.config().identifier)
 }
 
+/// 公会数据接口：令牌只在 Rust 侧使用，前端拿不到
+#[tauri::command]
+async fn guild_me(app: tauri::AppHandle) -> Result<guild::GuildMe, guild::GuildApiError> {
+    guild::fetch_me(&app.config().identifier).await
+}
+
+#[tauri::command]
+async fn guild_announcements(
+    app: tauri::AppHandle,
+    limit: Option<u32>,
+) -> Result<Vec<guild::GuildAnnouncement>, guild::GuildApiError> {
+    guild::fetch_announcements(&app.config().identifier, limit).await
+}
+
+#[tauri::command]
+async fn guild_packs(
+    app: tauri::AppHandle,
+) -> Result<Vec<guild::GuildPack>, guild::GuildApiError> {
+    guild::fetch_packs(&app.config().identifier).await
+}
+
+#[tauri::command]
+async fn guild_servers(
+    app: tauri::AppHandle,
+) -> Result<Vec<guild::GuildServer>, guild::GuildApiError> {
+    guild::fetch_servers(&app.config().identifier).await
+}
+
 #[derive(serde::Serialize)]
 struct NetProbe {
     label: String,
@@ -529,7 +557,6 @@ fn main() {
         .plugin(api::utils::init())
         .plugin(api::cache::init())
         .plugin(api::files::init())
-        .plugin(api::ads::init())
         .plugin(api::friends::init())
         .plugin(api::worlds::init())
         .manage(PendingUpdateData::default())
@@ -553,6 +580,10 @@ fn main() {
             guild_begin_login,
             guild_session,
             guild_sign_out,
+            guild_me,
+            guild_announcements,
+            guild_packs,
+            guild_servers,
         ]);
 
     tracing::info!("Initializing app...");
