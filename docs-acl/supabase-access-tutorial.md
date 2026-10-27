@@ -94,7 +94,7 @@ export default {
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" \
   "https://guild.yingzhou1110.top/auth/v1/health" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlaHpmaWFmanF0aGV0ZHhla3hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMDM5NzQsImV4cCI6MjEwODU3OTk3NH0.JDHuCJ89Wm5T-N_MntRIuaogV7sf2qoYl_Rf-BWvDrQ"
+  -H "apikey: <已废弃的 anon key，项目已于 2026-10-27 删除>"
 ```
 
 预期 `200`（返回 `{"date":"...","description":"GoTrue is a user registration and authentication API"}`）。
