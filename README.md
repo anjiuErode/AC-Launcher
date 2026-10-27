@@ -6,7 +6,6 @@
 - 支持平台：Windows 10 / 11 x64（不提供 macOS 与 Linux 构建）
 - 本仓库是 GitHub fork，保留上游提交历史；所有修改见 [NOTICE.md](NOTICE.md)
 - 与 Rinth, Inc. 无隶属关系，未获其背书
-- 交接文档：[HANDOVER.md](HANDOVER.md) · 契约与决策记录：[docs-acl/](docs-acl/)
 
 ## Code signing policy
 
