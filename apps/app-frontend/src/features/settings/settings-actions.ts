@@ -7,7 +7,6 @@ export type InstanceDefaultsTab = 'java' | 'window' | 'hooks'
  */
 export interface SettingsActions {
 	openSettings: () => void
-	openProfile: () => void
 	openFeatureFlags: () => void
 	openSyncedOptions: () => void
 	openInstanceDefaults: (tab: InstanceDefaultsTab) => void

@@ -6,7 +6,6 @@
 			variant="app"
 			site-url="https://modrinth.com"
 			project-link-mode="app"
-			:edit-profile-link="openProfileSettings"
 			external-navigation
 		>
 			<template #project-actions="{ project }">
@@ -51,7 +50,6 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, ref, watch } from 'vue'
 import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 
-import { injectSettingsActions } from '@/features/settings/settings-actions'
 import {
 	block_user,
 	change_user_avatar,
@@ -69,7 +67,6 @@ import { useBreadcrumb } from '@/shared/breadcrumbs'
 
 const route = useRoute()
 const router = useRouter()
-const { openProfile: openProfileSettings } = injectSettingsActions()
 const queryClient = useQueryClient()
 const { formatMessage } = useVIntl()
 const { handleError } = injectNotificationManager()
