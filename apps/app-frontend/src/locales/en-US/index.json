@@ -555,8 +555,20 @@
 	"app.guild-account.working": {
 		"message": "Working…"
 	},
+	"app.guild.attachment.hide": {
+		"message": "Hide preview"
+	},
 	"app.guild.attachment.open": {
-		"message": "Open"
+		"message": "Open in browser"
+	},
+	"app.guild.attachment.preview": {
+		"message": "Preview"
+	},
+	"app.guild.attachment.preview-failed": {
+		"message": "This attachment cannot be previewed here"
+	},
+	"app.guild.attachment.preview-loading": {
+		"message": "Loading…"
 	},
 	"app.guild.attachment.title": {
 		"message": "Attachments"

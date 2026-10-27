@@ -9,6 +9,7 @@ import {
 	SpinnerIcon,
 } from '@modrinth/assets'
 import { Button, defineMessages, Tabs, useVIntl } from '@modrinth/ui'
+import { renderString } from '@modrinth/utils/parse'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { Ref } from 'vue'
@@ -182,7 +183,23 @@ const messages = defineMessages({
 	},
 	attachmentOpen: {
 		id: 'app.guild.attachment.open',
-		defaultMessage: 'Open',
+		defaultMessage: 'Open in browser',
+	},
+	attachmentPreview: {
+		id: 'app.guild.attachment.preview',
+		defaultMessage: 'Preview',
+	},
+	attachmentHide: {
+		id: 'app.guild.attachment.hide',
+		defaultMessage: 'Hide preview',
+	},
+	attachmentPreviewLoading: {
+		id: 'app.guild.attachment.preview-loading',
+		defaultMessage: 'Loading…',
+	},
+	attachmentPreviewFailed: {
+		id: 'app.guild.attachment.preview-failed',
+		defaultMessage: 'This attachment cannot be previewed here',
 	},
 	copyAddress: {
 		id: 'app.guild.server.copy',
@@ -330,16 +347,65 @@ function formatSize(bytes: number): string {
 	return `${megabytes >= 100 ? megabytes.toFixed(0) : megabytes.toFixed(1)} MB`
 }
 
+type AttachmentKind = 'image' | 'markdown' | 'text' | 'pdf' | null
+
+/** 按 MIME 判类型，MIME 缺失时退回扩展名 */
+function attachmentKind(attachment: GuildAttachment): AttachmentKind {
+	const mime = attachment.mime.toLowerCase()
+	const name = attachment.name.toLowerCase()
+	if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/.test(name)) return 'image'
+	if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf'
+	if (mime === 'text/markdown' || name.endsWith('.md')) return 'markdown'
+	if (mime === 'text/plain' || name.endsWith('.txt')) return 'text'
+	return null
+}
+
+/** 每份附件的内联预览状态，键为 newsId:attachmentId */
+const previews = reactive<
+	Record<string, { open: boolean; loading: boolean; text: string | null; error: string | null }>
+>({})
+
+function previewKey(announcement: GuildAnnouncement, attachment: GuildAttachment): string {
+	return `${String(announcement.id)}:${String(attachment.id)}`
+}
+
+function previewOf(announcement: GuildAnnouncement, attachment: GuildAttachment) {
+	return previews[previewKey(announcement, attachment)]
+}
+
+/** 文本类附件才需要拉内容；PDF 直接交给 webview 的 iframe */
+async function togglePreview(
+	announcement: GuildAnnouncement,
+	attachment: GuildAttachment,
+): Promise<void> {
+	const key = previewKey(announcement, attachment)
+	const entry = previews[key] ?? { open: false, loading: false, text: null, error: null }
+	previews[key] = entry
+	entry.open = !entry.open
+	if (!entry.open || entry.text !== null || entry.loading) return
+
+	const kind = attachmentKind(attachment)
+	if (kind !== 'markdown' && kind !== 'text') return
+
+	entry.loading = true
+	entry.error = null
+	try {
+		entry.text = await invoke<string>('guild_attachment_text', {
+			newsId: String(announcement.id),
+			attachmentId: String(attachment.id),
+		})
+	} catch (error) {
+		entry.error = describeGuildError(error, formatMessage(messages.attachmentPreviewFailed))
+	} finally {
+		entry.loading = false
+	}
+}
+
 /** 附件内容走官网公开下载地址，不需要令牌；图片直接内联，其余交给浏览器打开 */
 function attachmentUrl(announcement: GuildAnnouncement, attachment: GuildAttachment): string {
 	const newsId = encodeURIComponent(String(announcement.id))
 	const attachmentId = encodeURIComponent(String(attachment.id))
 	return `${API_BASE}/api/news/${newsId}/attachments/${attachmentId}`
-}
-
-function isImageAttachment(attachment: GuildAttachment): boolean {
-	if (attachment.mime.startsWith('image/')) return true
-	return /\.(png|jpe?g|gif|webp)$/i.test(attachment.name)
 }
 
 async function openAttachment(
@@ -489,24 +555,74 @@ async function openPack(pack: GuildPack): Promise<void> {
 							</span>
 							<template v-for="att in item.attachments" :key="String(att.id)">
 								<img
-									v-if="isImageAttachment(att)"
+									v-if="attachmentKind(att) === 'image'"
 									:src="attachmentUrl(item, att)"
 									:alt="att.name"
 									class="max-h-72 w-fit rounded-xl border border-solid border-surface-5 object-contain"
 								/>
-								<div
-									v-else
-									class="flex items-center justify-between gap-3 rounded-xl bg-surface-4 px-3 py-2"
-								>
-									<span class="flex min-w-0 flex-col">
-										<span class="truncate text-sm text-contrast">{{ att.name }}</span>
-										<span v-if="att.size" class="text-xs text-secondary">
-											{{ formatSize(att.size) }}
+								<div v-else class="flex flex-col gap-2">
+									<div class="flex items-center justify-between gap-3 rounded-xl bg-surface-4 px-3 py-2">
+										<span class="flex min-w-0 flex-col">
+											<span class="truncate text-sm text-contrast">{{ att.name }}</span>
+											<span v-if="att.size" class="text-xs text-secondary">
+												{{ formatSize(att.size) }}
+											</span>
 										</span>
-									</span>
-									<Button size="sm" type="outlined" @click="openAttachment(item, att)">
-										{{ formatMessage(messages.attachmentOpen) }}
-									</Button>
+										<span class="flex shrink-0 items-center gap-2">
+											<Button
+												v-if="attachmentKind(att) !== null"
+												size="sm"
+												type="outlined"
+												@click="togglePreview(item, att)"
+											>
+												{{
+													previewOf(item, att)?.open
+														? formatMessage(messages.attachmentHide)
+														: formatMessage(messages.attachmentPreview)
+												}}
+											</Button>
+											<Button size="sm" type="quiet" @click="openAttachment(item, att)">
+												{{ formatMessage(messages.attachmentOpen) }}
+											</Button>
+										</span>
+									</div>
+
+									<div
+										v-if="previewOf(item, att)?.open"
+										class="rounded-xl border border-solid border-surface-5 bg-bg p-3"
+									>
+										<div
+											v-if="previewOf(item, att)?.loading"
+											class="flex items-center gap-2 text-sm text-secondary"
+										>
+											<SpinnerIcon class="size-4 animate-spin" />
+											{{ formatMessage(messages.attachmentPreviewLoading) }}
+										</div>
+										<p
+											v-else-if="previewOf(item, att)?.error"
+											class="m-0 text-sm text-secondary"
+										>
+											{{ previewOf(item, att)?.error }}
+										</p>
+										<!-- eslint-disable vue/no-v-html -- renderString 已过 xss 过滤 -->
+										<div
+											v-else-if="attachmentKind(att) === 'markdown'"
+											class="markdown-body max-h-96 overflow-y-auto text-sm leading-relaxed text-primary"
+											v-html="renderString(previewOf(item, att)?.text ?? '')"
+										></div>
+										<!-- eslint-enable vue/no-v-html -->
+										<pre
+											v-else-if="attachmentKind(att) === 'text'"
+											class="m-0 max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-primary"
+											>{{ previewOf(item, att)?.text ?? '' }}</pre
+										>
+										<iframe
+											v-else-if="attachmentKind(att) === 'pdf'"
+											:src="attachmentUrl(item, att) + '?inline=1'"
+											:title="att.name"
+											class="h-96 w-full rounded-lg border-0 bg-bg-raised"
+										></iframe>
+									</div>
 								</div>
 							</template>
 						</div>

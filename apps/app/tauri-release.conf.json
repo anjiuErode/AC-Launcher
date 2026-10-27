@@ -1,14 +1,20 @@
 {
 	"bundle": {
-		"createUpdaterArtifacts": false,
+		"createUpdaterArtifacts": true,
 		"windows": {}
 	},
 	"build": {
-		"features": []
+		"features": [
+			"updater"
+		]
 	},
 	"app": {
 		"security": {
-			"capabilities": ["core", "plugins"]
+			"capabilities": [
+				"core",
+				"plugins",
+				"updater"
+			]
 		}
 	},
 	"plugins": {}
