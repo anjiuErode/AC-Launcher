@@ -11,7 +11,6 @@ import OnboardingChecklist from '@/features/onboarding/checklist.vue'
 import type { ModrinthCredentials } from '@/helpers/mr_auth'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
 
-import Promotion from './promotion.vue'
 
 const props = defineProps<{
 	credentials: ModrinthCredentials | null | undefined
@@ -147,7 +146,7 @@ const messages = defineMessages({
 				aria-hidden="true"
 			/>
 		</div>
-		<Promotion v-if="showAd" @upgrade-height="upgradeHeight = $event" />
+		<!-- ACL：已移除 Modrinth 广告窗与会员推广（内容来自远程广告服务） -->
 	</div>
 </template>
 
