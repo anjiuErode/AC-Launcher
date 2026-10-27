@@ -248,7 +248,8 @@ const hostingIntercomIdentityKey = computed(() => {
 })
 const hostingIntercom = useHostingIntercom({
 	enabled: computed(
-		() => hostingRouteActive.value && !hostingUpdateRequired.value && !!credentials.value?.session,
+		// ACL：Hosting 入口已移除，不再初始化 intercom 客服
+		() => false,
 	),
 	appId: 'ykeritl9',
 	fetchToken: fetchIntercomToken,
@@ -2082,18 +2083,7 @@ onMounted(refreshGuildSession)
 			>
 				<ImageIcon />
 			</NavButton>
-			<NavButton
-				v-tooltip.right="formatMessage(messages.modrinthHosting)"
-				to="/hosting/manage"
-				:is-primary="(r) => r.path === '/hosting/manage' || r.path === '/hosting/manage/'"
-				:is-subpage="
-					(r) =>
-						(r.path.startsWith('/hosting/manage/') && r.path !== '/hosting/manage/') ||
-						((r.path.startsWith('/browse') || r.path.startsWith('/project')) && r.query.sid)
-				"
-			>
-				<ServerStackIcon />
-			</NavButton>
+			<!-- ACL：已移除 Modrinth Hosting 入口（该服务与公会无关） -->
 			<suspense>
 				<QuickInstanceSwitcher>
 					<NavButton
