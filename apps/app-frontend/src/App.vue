@@ -15,6 +15,7 @@ import {
 } from '@modrinth/assets'
 import {
 	Admonition,
+	Button,
 	commonMessages,
 	ContentInstallModal,
 	ContentUpdaterModal,
@@ -411,6 +412,20 @@ const authServerQuery = useQuery({
 	refetchOnWindowFocus: false,
 })
 
+// 认证服务器不可用是常驻状态，允许用户收起；收起了就记住，避免每次启动都顶在页面上
+const AUTH_WARNING_COLLAPSED_KEY = 'acl-auth-warning-collapsed'
+const authWarningCollapsed = ref(localStorage.getItem(AUTH_WARNING_COLLAPSED_KEY) === '1')
+
+function collapseAuthWarning() {
+	authWarningCollapsed.value = true
+	localStorage.setItem(AUTH_WARNING_COLLAPSED_KEY, '1')
+}
+
+function expandAuthWarning() {
+	authWarningCollapsed.value = false
+	localStorage.removeItem(AUTH_WARNING_COLLAPSED_KEY)
+}
+
 const authUnreachable = computed(() => {
 	if (authServerQuery.isError.value && !authServerQuery.isLoading.value) {
 		console.warn('Failed to reach auth servers', authServerQuery.error.value)
@@ -475,6 +490,14 @@ const messages = defineMessages({
 	authUnreachableHeader: {
 		id: 'app.auth-servers.unreachable.header',
 		defaultMessage: 'Cannot reach authentication servers',
+	},
+	authWarningCollapse: {
+		id: 'app.auth-servers.collapse',
+		defaultMessage: 'Hide',
+	},
+	authWarningExpand: {
+		id: 'app.auth-servers.expand',
+		defaultMessage: 'Show authentication warning',
 	},
 	authUnreachableBody: {
 		id: 'app.auth-servers.unreachable.body',
@@ -1966,14 +1989,31 @@ onMounted(refreshGuildSession)
 					v-html="renderString(criticalErrorMessage.body ?? '')"
 				></div>
 			</Admonition>
-			<Admonition
-				v-if="authUnreachable"
-				type="warning"
-				:header="formatMessage(messages.authUnreachableHeader)"
-				class="m-6 mb-0"
+			<div
+				v-if="authUnreachable && !authWarningCollapsed"
+				class="m-6 mb-0 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-solid border-surface-5 bg-bg-raised px-4 py-3"
 			>
-				{{ formatMessage(messages.authUnreachableBody) }}
-			</Admonition>
+				<div class="flex min-w-0 flex-col gap-1">
+					<span class="text-sm font-semibold text-contrast">
+						{{ formatMessage(messages.authUnreachableHeader) }}
+					</span>
+					<span class="text-sm text-secondary">
+						{{ formatMessage(messages.authUnreachableBody) }}
+					</span>
+				</div>
+				<Button size="sm" type="outlined" @click="collapseAuthWarning">
+					{{ formatMessage(messages.authWarningCollapse) }}
+				</Button>
+			</div>
+			<div v-else-if="authUnreachable" class="m-6 mb-0 flex justify-end">
+				<button
+					type="button"
+					class="cursor-pointer rounded border-none bg-transparent p-0 text-xs text-secondary hover:text-contrast"
+					@click="expandAuthWarning"
+				>
+					{{ formatMessage(messages.authWarningExpand) }}
+				</button>
+			</div>
 			<HostingUpdateRequired v-if="hostingUpdateRequired" />
 			<RouterView v-else v-slot="{ Component }">
 				<template v-if="Component">
