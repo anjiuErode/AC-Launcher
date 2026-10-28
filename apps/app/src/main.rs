@@ -332,6 +332,16 @@ fn guild_set_presence_state(
     });
 }
 
+/// 下载公会整合包到本地并校验（P4-2）
+#[tauri::command]
+async fn guild_download_pack(
+    url: String,
+    sha256: String,
+    filename: String,
+) -> Result<guild::GuildPackFile, guild::GuildApiError> {
+    guild::download_pack(&url, &sha256, &filename).await
+}
+
 /// 立即上报一次（切换隐身、刚进游戏时用）
 #[tauri::command]
 async fn guild_report_presence(
@@ -731,6 +741,7 @@ fn main() {
             guild_set_presence_visible,
             guild_set_presence_state,
             guild_report_presence,
+            guild_download_pack,
         ]);
 
     tracing::info!("Initializing app...");

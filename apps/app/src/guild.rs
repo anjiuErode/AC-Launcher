@@ -643,3 +643,128 @@ pub async fn fetch_presence_list(identifier: &str) -> Result<Vec<GuildPresence>,
 	let payload: Items<GuildPresence> = get_json(identifier, "/api/guild/presence").await?;
 	Ok(payload.items)
 }
+
+// ---------------------------------------------------------------------------
+// 公会整合包：下载与校验（P4-2）
+//
+// 下载放 Rust 侧的理由：需要落盘、需要算 SHA256、需要嗅探包格式，
+// 而且界面层不该直接拿外部 URL 去 fetch（CSP 与跨域都不方便）。
+// ---------------------------------------------------------------------------
+
+/// 下载并校验后的整合包
+#[derive(Debug, Serialize)]
+pub struct GuildPackFile {
+	pub path: String,
+	/// `mrpack`（含 modrinth.index.json）或 `zip`（实例压缩包）
+	pub format: String,
+	pub size_bytes: u64,
+}
+
+fn sanitize_filename(name: &str) -> String {
+	let cleaned: String = name
+		.chars()
+		.map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+		.collect();
+	// 去掉可能的前导点，避免生成隐藏文件或 `..` 之类
+	let trimmed = cleaned.trim_start_matches('.').to_string();
+	if trimmed.is_empty() {
+		"pack.zip".to_string()
+	} else {
+		trimmed
+	}
+}
+
+async fn detect_pack_format(path: &std::path::Path) -> String {
+	match async_zip::tokio::read::fs::ZipFileReader::new(path).await {
+		Ok(zip) => {
+			let has_index = zip.file().entries().iter().any(|entry| {
+				entry
+					.filename()
+					.as_str()
+					.is_ok_and(|name| name == "modrinth.index.json")
+			});
+			if has_index { "mrpack".to_string() } else { "zip".to_string() }
+		}
+		// 打不开就按普通压缩包处理，让安装阶段给出更具体的错误
+		Err(_) => "zip".to_string(),
+	}
+}
+
+/// 下载整合包到临时目录并按 SHA256 校验。
+///
+/// `sha256` 为空表示服务端未提供校验值（契约允许），此时跳过校验但会在日志里留痕。
+pub async fn download_pack(
+	url: &str,
+	sha256: &str,
+	filename: &str,
+) -> Result<GuildPackFile, GuildApiError> {
+	use sha2::{Digest, Sha256};
+
+	if !url.starts_with("https://") {
+		return Err(api_error("bad_request", "整合包地址必须是 https 链接"));
+	}
+
+	let dir = std::env::temp_dir().join("acl-guild-packs");
+	tokio::fs::create_dir_all(&dir)
+		.await
+		.map_err(|err| api_error("io", format!("无法创建临时目录：{err}")))?;
+	let path = dir.join(sanitize_filename(filename));
+
+	let response = theseus::REQWEST_CLIENT
+		.get(url)
+		.timeout(std::time::Duration::from_secs(900))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法下载整合包：{err}")))?;
+
+	if !response.status().is_success() {
+		return Err(api_error(
+			"server",
+			format!("整合包下载失败：官网返回 {}", response.status()),
+		));
+	}
+
+	let mut file = tokio::fs::File::create(&path)
+		.await
+		.map_err(|err| api_error("io", format!("无法写入临时文件：{err}")))?;
+	let mut hasher = Sha256::new();
+	let mut size: u64 = 0;
+	let mut response = response;
+
+	loop {
+		let chunk = response
+			.chunk()
+			.await
+			.map_err(|err| api_error("network", format!("下载中断：{err}")))?;
+		let Some(chunk) = chunk else { break };
+		hasher.update(&chunk);
+		size += chunk.len() as u64;
+		file.write_all(&chunk)
+			.await
+			.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
+	}
+	file.flush()
+		.await
+		.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
+	drop(file);
+
+	if !sha256.is_empty() {
+		let actual = format!("{:X}", hasher.finalize());
+		if !actual.eq_ignore_ascii_case(sha256.trim()) {
+			let _ = tokio::fs::remove_file(&path).await;
+			return Err(api_error(
+				"checksum",
+				format!("整合包校验失败（期望 {sha256}，实际 {actual}），已丢弃下载文件"),
+			));
+		}
+	} else {
+		tracing::warn!("Guild pack {filename} has no sha256; signature not verified");
+	}
+
+	let format = detect_pack_format(&path).await;
+	Ok(GuildPackFile {
+		path: path.to_string_lossy().to_string(),
+		format,
+		size_bytes: size,
+	})
+}

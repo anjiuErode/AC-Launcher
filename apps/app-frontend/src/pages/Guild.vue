@@ -9,7 +9,7 @@ import {
 	SpinnerIcon,
 	UsersIcon,
 } from '@modrinth/assets'
-import { Button, defineMessages, Tabs, Toggle, useVIntl } from '@modrinth/ui'
+import { Button, defineMessages, injectNotificationManager, Tabs, Toggle, useVIntl } from '@modrinth/ui'
 import { renderString } from '@modrinth/utils/parse'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
@@ -22,6 +22,7 @@ import {
 	isGuildApiError,
 	useGuildSession,
 } from '@/composables/use-guild-session'
+import { install_create_modpack_instance } from '@/helpers/install'
 
 interface GuildMe {
 	user_id: string
@@ -239,6 +240,18 @@ const messages = defineMessages({
 	attachmentPreviewFailed: {
 		id: 'app.guild.attachment.preview-failed',
 		defaultMessage: 'This attachment cannot be previewed here',
+	},
+	install: {
+		id: 'app.guild.pack.install',
+		defaultMessage: 'Install',
+	},
+	installing: {
+		id: 'app.guild.pack.installing',
+		defaultMessage: 'Installing…',
+	},
+	installZipPending: {
+		id: 'app.guild.pack.zip-pending',
+		defaultMessage: 'Instance-archive packs are not supported yet',
 	},
 	joinServer: {
 		id: 'app.guild.server.join',
@@ -514,6 +527,47 @@ async function openAttachment(
 	}
 }
 
+/** 正在安装的整合包 id，用于按钮 loading 与防重复点击 */
+const installingPackId = ref<string | null>(null)
+const { addNotification } = injectNotificationManager()
+
+/**
+ * 一键安装公会整合包：下载 → SHA256 校验 → 按格式分流。
+ * 校验与落盘在 Rust 侧完成，这里只负责编排与提示。
+ */
+async function installPack(pack: GuildPack): Promise<void> {
+	if (!pack.url || installingPackId.value) return
+
+	const key = String(pack.id ?? pack.url)
+	installingPackId.value = key
+	try {
+		const filename = pack.url.split('/').pop()?.split('?')[0] || `${pack.name}.mrpack`
+		const file = await invoke<{ path: string; format: string; size_bytes: number }>(
+			'guild_download_pack',
+			{ url: pack.url, sha256: pack.sha256 ?? '', filename },
+		)
+
+		if (file.format === 'zip') {
+			addNotification({
+				type: 'warning',
+				title: pack.name,
+				text: formatMessage(messages.installZipPending),
+			})
+			return
+		}
+
+		await install_create_modpack_instance({ type: 'fromFile', path: file.path })
+	} catch (error) {
+		const message = await handleRequestError(
+			error,
+			formatMessage(messages.unavailable),
+		)
+		addNotification({ type: 'error', title: pack.name, text: message })
+	} finally {
+		installingPackId.value = null
+	}
+}
+
 /** 「加入此服务器」弹窗：复用既有的实例选择与去重判断 */
 const addServerModal = ref()
 
@@ -769,9 +823,22 @@ async function openPack(pack: GuildPack): Promise<void> {
 									{{ pack.loader }}
 								</span>
 							</div>
-							<Button size="sm" :disabled="!pack.url" @click="openPack(pack)">
-								{{ formatMessage(messages.download) }}
-							</Button>
+							<div class="flex flex-wrap items-center gap-2">
+								<Button
+									size="sm"
+									:disabled="!pack.url || installingPackId === String(pack.id ?? pack.url)"
+									@click="installPack(pack)"
+								>
+									{{
+										installingPackId === String(pack.id ?? pack.url)
+											? formatMessage(messages.installing)
+											: formatMessage(messages.install)
+									}}
+								</Button>
+								<Button size="sm" type="outlined" :disabled="!pack.url" @click="openPack(pack)">
+									{{ formatMessage(messages.download) }}
+								</Button>
+							</div>
 						</div>
 						<p v-if="pack.description" class="m-0 text-sm text-primary">
 							{{ pack.description }}
