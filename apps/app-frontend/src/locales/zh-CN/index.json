@@ -722,6 +722,9 @@
 	"app.guild.server.copy": {
 		"message": "复制地址"
 	},
+	"app.guild.server.join": {
+		"message": "加入实例"
+	},
 	"app.guild.server.whitelist": {
 		"message": "需白名单"
 	},

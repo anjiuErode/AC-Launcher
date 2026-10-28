@@ -16,6 +16,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import type { Ref } from 'vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
+import AddServerToInstanceModal from '@/components/ui/install_flow/AddServerToInstanceModal.vue'
 import {
 	describeGuildError,
 	isGuildApiError,
@@ -238,6 +239,10 @@ const messages = defineMessages({
 	attachmentPreviewFailed: {
 		id: 'app.guild.attachment.preview-failed',
 		defaultMessage: 'This attachment cannot be previewed here',
+	},
+	joinServer: {
+		id: 'app.guild.server.join',
+		defaultMessage: 'Add to instance',
 	},
 	copyAddress: {
 		id: 'app.guild.server.copy',
@@ -507,6 +512,13 @@ async function openAttachment(
 	} catch (error) {
 		console.error('failed to open attachment', error)
 	}
+}
+
+/** 「加入此服务器」弹窗：复用既有的实例选择与去重判断 */
+const addServerModal = ref()
+
+function joinServer(server: GuildServer): void {
+	addServerModal.value?.show(server.name, addressOf(server))
 }
 
 function addressOf(server: GuildServer): string {
@@ -831,22 +843,27 @@ async function openPack(pack: GuildPack): Promise<void> {
 								{{ server.description }}
 							</p>
 						</div>
-						<Button
-							size="sm"
-							type="outlined"
-							@click="copyText(addressOf(server), `server-${index}`)"
-						>
+						<div class="flex flex-wrap items-center gap-2">
+							<Button size="sm" @click="joinServer(server)">
+								{{ formatMessage(messages.joinServer) }}
+							</Button>
+							<Button
+								size="sm"
+								type="outlined"
+								@click="copyText(addressOf(server), `server-${index}`)"
+							>
 							<CheckIcon
 								v-if="copiedKey === `server-${index}`"
 								class="size-4 text-green"
 							/>
 							<CopyIcon v-else class="size-4" />
-							{{
-								copiedKey === `server-${index}`
-									? formatMessage(messages.copied)
-									: formatMessage(messages.copyAddress)
-							}}
-						</Button>
+								{{
+									copiedKey === `server-${index}`
+										? formatMessage(messages.copied)
+										: formatMessage(messages.copyAddress)
+								}}
+							</Button>
+						</div>
 					</article>
 				</section>
 
@@ -915,5 +932,7 @@ async function openPack(pack: GuildPack): Promise<void> {
 				</section>
 			</template>
 		</div>
+
+		<AddServerToInstanceModal ref="addServerModal" />
 	</div>
 </template>

@@ -630,6 +630,9 @@
 	"app.guild.server.copy": {
 		"message": "Copy address"
 	},
+	"app.guild.server.join": {
+		"message": "Add to instance"
+	},
 	"app.guild.server.whitelist": {
 		"message": "Whitelist required"
 	},
