@@ -1,11 +1,11 @@
 {
-	"version": "0.1.41",
-	"notes": "公会在线状态：新增「在线」标签、30 秒心跳、隐身开关。心跳跑在后台进程，最小化到托盘也不会掉线。",
-	"pub_date": "2026-10-28T11:04:17Z",
+	"version": "0.1.42",
+	"notes": "修复启动假死；新增「关于 Launcher」（版本、检查更新、贡献者/运维者/鸣谢/品牌）；更新检查改为统一流程，失败不再中断轮询。",
+	"pub_date": "2026-10-28T13:01:25Z",
 	"platforms": {
 		"windows-x86_64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcmt6YUNiVVV0K0hKZWVaY3ZTYk5tSjB4dndiODhjNnVRRkx4N21COEo1Vmx5aFN3V0czUTFvZEhScG1tUElVeWNVWHhKcFI1SjdwaFRnVUpXa3Fkbmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMTg1NDI1CWZpbGU6QUNMXzAuMS40MV94NjQtc2V0dXAuZXhlCmxsRnFzT0xoVjJIeHAwMkR6S3JwZ2hsM2pMWkdOVnhuOVgrUkE2amxpY1g4aFIxd2dBYTY0cnJmSFRjNWV4Yjh0VVgvSUhNYjU4TXBvQWxhTE5NeEJBPT0K",
-			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_0.1.41_x64-setup.exe"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcnYwY21CenF6UVJSTm5IazhlV3dmUVJjalpMUFhNUUVTZHVRSnJVM1ZhMWNGajJWVEdhV2doRFJoTG9CRHNrdnMyNEppRmloWE5QWitpNTRRRlFOeXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMTkyNDE1CWZpbGU6QUNMXzAuMS40Ml94NjQtc2V0dXAuZXhlCkc1L3l1UWhobDBMMDVpdGJUdFdXUmQzNzhIeDlMVEw4ekRFT3oybXJLS1Q5eTlmN1pSaVBCWHpXTUN5Y09GUmdNaWttcnJGRGpDQ1ZWZDFJZmhBWkNRPT0K",
+			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_0.1.42_x64-setup.exe"
 		}
 	}
 }
