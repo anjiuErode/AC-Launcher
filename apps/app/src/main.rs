@@ -295,6 +295,50 @@ async fn guild_servers(
     guild::fetch_servers(&app.config().identifier).await
 }
 
+/// 在线列表（只读）
+#[tauri::command]
+async fn guild_presence(
+    app: tauri::AppHandle,
+) -> Result<Vec<guild::GuildPresence>, guild::GuildApiError> {
+    guild::fetch_presence_list(&app.config().identifier).await
+}
+
+/// 当前隐身偏好（默认可见）
+#[tauri::command]
+fn guild_presence_visible(app: tauri::AppHandle) -> bool {
+    guild::presence_visible(&app.config().identifier)
+}
+
+/// 切换隐身。改完由界面立刻补报一次，让状态即时生效
+#[tauri::command]
+fn guild_set_presence_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    guild::set_presence_visible(&app.config().identifier, visible)
+}
+
+/// 界面上报「现在在玩哪个实例」，后台据此每 30 秒心跳
+#[tauri::command]
+fn guild_set_presence_state(
+    instance_name: String,
+    mc_version: String,
+    loader: String,
+    running: bool,
+) {
+    guild::update_presence_state(guild::PresenceState {
+        running,
+        instance_name,
+        mc_version,
+        loader,
+    });
+}
+
+/// 立即上报一次（切换隐身、刚进游戏时用）
+#[tauri::command]
+async fn guild_report_presence(
+    app: tauri::AppHandle,
+) -> Result<bool, guild::GuildApiError> {
+    guild::report_presence(&app.config().identifier).await
+}
+
 #[derive(serde::Serialize)]
 struct NetProbe {
     label: String,
@@ -536,6 +580,31 @@ fn main() {
                 ));
             });
 
+            // 公会在线心跳：界面负责推「在玩哪个实例」，这里负责每 30 秒上报一次。
+            // 心跳放后台而不是 webview，是因为启动游戏后启动器默认最小化，
+            // 前端的 setInterval 会被节流甚至暂停。
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut ticker = tokio::time::interval(
+                        std::time::Duration::from_secs(30),
+                    );
+                    ticker.set_missed_tick_behavior(
+                        tokio::time::MissedTickBehavior::Delay,
+                    );
+                    loop {
+                        ticker.tick().await;
+                        let identifier = handle.config().identifier.clone();
+                        if guild::current(&identifier).is_none() {
+                            continue;
+                        }
+                        // 401 已在内部清会话；其余错误（断网、429）静默，
+                        // 心跳失败不该打扰用户
+                        let _ = guild::report_presence(&identifier).await;
+                    }
+                });
+            }
+
             #[cfg(not(target_os = "linux"))]
             if let Some(window) = app.get_window("main")
                 && let Err(e) = window.set_shadow(true)
@@ -594,6 +663,11 @@ fn main() {
             guild_attachment_text,
             guild_packs,
             guild_servers,
+            guild_presence,
+            guild_presence_visible,
+            guild_set_presence_visible,
+            guild_set_presence_state,
+            guild_report_presence,
         ]);
 
     tracing::info!("Initializing app...");

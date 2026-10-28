@@ -17,6 +17,7 @@
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -489,4 +490,156 @@ pub async fn fetch_packs(identifier: &str) -> Result<Vec<GuildPack>, GuildApiErr
 pub async fn fetch_servers(identifier: &str) -> Result<Vec<GuildServer>, GuildApiError> {
 	let body: Items<GuildServer> = get_json(identifier, "/api/guild/servers").await?;
 	Ok(body.items)
+}
+
+// ---------------------------------------------------------------------------
+// 在线状态（P3）
+//
+// 分工：界面负责告诉后台「现在在玩哪个实例」，后台负责每 30 秒上报一次。
+// 之所以把心跳放在 Rust：启动器启动游戏后默认最小化到托盘，webview 的
+// setInterval 会被节流甚至暂停，前端定时器做心跳必然掉线。
+// ---------------------------------------------------------------------------
+
+/// 当前在玩什么。`running=false` 表示没有游戏在跑，此时不上报。
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct PresenceState {
+	pub running: bool,
+	pub instance_name: String,
+	pub mc_version: String,
+	pub loader: String,
+}
+
+static PRESENCE_STATE: LazyLock<Mutex<PresenceState>> =
+	LazyLock::new(|| Mutex::new(PresenceState::default()));
+
+/// 成员列表里的一个人
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GuildPresence {
+	pub username: String,
+	pub instance_name: String,
+	pub mc_version: String,
+	pub last_seen: String,
+}
+
+/// 本地偏好：隐身开关，默认可见
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GuildPrefs {
+	#[serde(default = "default_presence_visible")]
+	presence_visible: bool,
+}
+
+fn default_presence_visible() -> bool {
+	true
+}
+
+impl Default for GuildPrefs {
+	fn default() -> Self {
+		Self {
+			presence_visible: true,
+		}
+	}
+}
+
+fn prefs_path(identifier: &str) -> Option<PathBuf> {
+	crate::app_config_dir_for(identifier).map(|dir| dir.join("guild_prefs.json"))
+}
+
+fn read_prefs(identifier: &str) -> GuildPrefs {
+	prefs_path(identifier)
+		.and_then(|path| std::fs::read_to_string(path).ok())
+		.and_then(|raw| serde_json::from_str(&raw).ok())
+		.unwrap_or_default()
+}
+
+pub fn presence_visible(identifier: &str) -> bool {
+	read_prefs(identifier).presence_visible
+}
+
+pub fn set_presence_visible(identifier: &str, visible: bool) -> Result<(), String> {
+	let path = prefs_path(identifier).ok_or_else(|| "无法定位应用配置目录".to_string())?;
+	if let Some(parent) = path.parent() {
+		std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+	}
+	let prefs = GuildPrefs {
+		presence_visible: visible,
+	};
+	let raw = serde_json::to_string_pretty(&prefs).map_err(|error| error.to_string())?;
+	std::fs::write(path, raw).map_err(|error| error.to_string())
+}
+
+/// 界面在游戏启停时调用
+pub fn update_presence_state(state: PresenceState) {
+	if let Ok(mut guard) = PRESENCE_STATE.lock() {
+		*guard = state;
+	}
+}
+
+pub fn presence_snapshot() -> PresenceState {
+	PRESENCE_STATE
+		.lock()
+		.map(|guard| guard.clone())
+		.unwrap_or_default()
+}
+
+/// 带 JSON 体的 POST。429 是契约里的正常限流，按成功处理。
+async fn post_json(
+	identifier: &str,
+	path: &str,
+	body: &serde_json::Value,
+) -> Result<(), GuildApiError> {
+	let session = read_session(identifier)
+		.ok_or_else(|| api_error("not_signed_in", "尚未登录公会账号"))?;
+
+	let response = theseus::REQWEST_CLIENT
+		.post(format!("{API_BASE}{path}"))
+		.header("x-studio-token", &session.token)
+		.json(body)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法连接官网：{err}")))?;
+
+	let status = response.status();
+	if status.as_u16() == 401 {
+		let _ = clear_session(identifier);
+		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
+	}
+	// 客户端每 30 秒一次，服务端 10 秒内重复会回 429 —— 这是正常节奏，不该当错误
+	if status.as_u16() == 429 || status.is_success() {
+		return Ok(());
+	}
+
+	let body = response.text().await.unwrap_or_default();
+	let message = serde_json::from_str::<serde_json::Value>(&body)
+		.ok()
+		.and_then(|value| {
+			value
+				.get("error")
+				.and_then(|error| error.as_str())
+				.map(str::to_string)
+		})
+		.unwrap_or_else(|| format!("官网返回 {status}"));
+	Err(api_error("server", message))
+}
+
+/// 上报一次在线状态。返回 false 表示当前没有在玩游戏（未发送）。
+pub async fn report_presence(identifier: &str) -> Result<bool, GuildApiError> {
+	let state = presence_snapshot();
+	if !state.running {
+		return Ok(false);
+	}
+
+	let body = serde_json::json!({
+		"instance_name": state.instance_name,
+		"mc_version": state.mc_version,
+		"loader": state.loader,
+		"visible": presence_visible(identifier),
+	});
+	post_json(identifier, "/api/guild/presence", &body).await?;
+	Ok(true)
+}
+
+pub async fn fetch_presence_list(identifier: &str) -> Result<Vec<GuildPresence>, GuildApiError> {
+	let payload: Items<GuildPresence> = get_json(identifier, "/api/guild/presence").await?;
+	Ok(payload.items)
 }

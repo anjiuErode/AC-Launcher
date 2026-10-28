@@ -7,13 +7,14 @@ import {
 	RefreshCwIcon,
 	ServerIcon,
 	SpinnerIcon,
+	UsersIcon,
 } from '@modrinth/assets'
-import { Button, defineMessages, Tabs, useVIntl } from '@modrinth/ui'
+import { Button, defineMessages, Tabs, Toggle, useVIntl } from '@modrinth/ui'
 import { renderString } from '@modrinth/utils/parse'
 import { invoke } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { Ref } from 'vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import {
 	describeGuildError,
@@ -65,7 +66,14 @@ interface GuildServer {
 	whitelist_required: boolean
 }
 
-type SectionKey = 'announcements' | 'packs' | 'servers'
+type SectionKey = 'announcements' | 'packs' | 'servers' | 'presence'
+
+interface GuildPresence {
+	username: string
+	instance_name: string
+	mc_version: string
+	last_seen: string
+}
 
 /** 与 Rust 侧 API_BASE 同源；附件是公开直链，前端直接取 */
 const API_BASE = 'https://yingzhou1110.top'
@@ -80,16 +88,22 @@ const meLoading = ref(false)
 const announcements = ref<GuildAnnouncement[]>([])
 const packs = ref<GuildPack[]>([])
 const servers = ref<GuildServer[]>([])
+const presenceList = ref<GuildPresence[]>([])
+const presenceVisible = ref(true)
+/** 在线列表的自动刷新定时器（只在「在线」标签打开时跑） */
+let presenceTimer: ReturnType<typeof setInterval> | null = null
 
 const loading = reactive<Record<SectionKey, boolean>>({
 	announcements: false,
 	packs: false,
 	servers: false,
+	presence: false,
 })
 const errors = reactive<Record<SectionKey, string | null>>({
 	announcements: null,
 	packs: null,
 	servers: null,
+	presence: null,
 })
 
 const activeTab = ref('announcements')
@@ -144,6 +158,30 @@ const messages = defineMessages({
 	tabPacks: {
 		id: 'app.guild.tab.packs',
 		defaultMessage: 'Modpacks',
+	},
+	tabPresence: {
+		id: 'app.guild.tab.presence',
+		defaultMessage: 'Online',
+	},
+	presenceVisibleTitle: {
+		id: 'app.guild.presence.visible-title',
+		defaultMessage: 'Show me as online',
+	},
+	presenceVisibleHint: {
+		id: 'app.guild.presence.visible-hint',
+		defaultMessage: "When off, you can still see others but won't appear in the member list.",
+	},
+	presenceEmpty: {
+		id: 'app.guild.presence.empty',
+		defaultMessage: 'Nobody is online right now',
+	},
+	presenceLastSeen: {
+		id: 'app.guild.presence.last-seen',
+		defaultMessage: 'Last seen {when}',
+	},
+	presenceUnknownInstance: {
+		id: 'app.guild.presence.unknown-instance',
+		defaultMessage: 'Unknown instance',
 	},
 	tabServers: {
 		id: 'app.guild.tab.servers',
@@ -235,6 +273,11 @@ const tabs = computed(() => [
 		label: formatMessage(messages.tabServers),
 		icon: ServerIcon,
 	},
+	{
+		value: 'presence',
+		label: formatMessage(messages.tabPresence),
+		icon: UsersIcon,
+	},
 ])
 
 const displayName = computed(
@@ -300,6 +343,50 @@ async function loadAll(): Promise<void> {
 		loadList('guild_packs', packs, 'packs'),
 		loadList('guild_servers', servers, 'servers'),
 	])
+	await loadPresenceVisible()
+}
+
+async function loadPresenceVisible(): Promise<void> {
+	try {
+		presenceVisible.value = await invoke<boolean>('guild_presence_visible')
+	} catch {
+		presenceVisible.value = true
+	}
+}
+
+watch(activeTab, (tab) => {
+	stopPresenceTimer()
+	if (tab !== 'presence' || !session.value) return
+	void loadPresence()
+	presenceTimer = setInterval(() => {
+		void loadPresence()
+	}, 30_000)
+})
+
+onUnmounted(stopPresenceTimer)
+
+async function loadPresence(): Promise<void> {
+	await loadList('guild_presence', presenceList, 'presence')
+}
+
+/** 切隐身：先落盘再补报一次，让别人立刻看到变化，不用等下一个 30 秒 */
+async function onPresenceVisibleChange(value: boolean | undefined): Promise<void> {
+	// Toggle 在不确定状态时会给 undefined，按「开启」处理，避免把开关打成半开
+	const next = value ?? true
+	presenceVisible.value = next
+	try {
+		await invoke('guild_set_presence_visible', { visible: next })
+		await invoke('guild_report_presence')
+	} catch {
+		// 上报失败不影响本地偏好，界面保持用户的选择
+	}
+}
+
+function stopPresenceTimer(): void {
+	if (presenceTimer) {
+		clearInterval(presenceTimer)
+		presenceTimer = null
+	}
 }
 
 function resetAll(): void {
@@ -308,9 +395,12 @@ function resetAll(): void {
 	announcements.value = []
 	packs.value = []
 	servers.value = []
+	presenceList.value = []
 	errors.announcements = null
 	errors.packs = null
 	errors.servers = null
+	errors.presence = null
+	stopPresenceTimer()
 }
 
 async function handleSignIn(): Promise<void> {
@@ -701,7 +791,10 @@ async function openPack(pack: GuildPack): Promise<void> {
 					</article>
 				</section>
 
-				<section v-else class="flex flex-col gap-3">
+				<section
+					v-else-if="activeTab === 'servers'"
+					class="flex flex-col gap-3"
+				>
 					<div v-if="loading.servers" class="flex items-center gap-2 text-sm text-secondary">
 						<SpinnerIcon class="size-4 animate-spin" />
 						{{ formatMessage(messages.loading) }}
@@ -755,6 +848,70 @@ async function openPack(pack: GuildPack): Promise<void> {
 							}}
 						</Button>
 					</article>
+				</section>
+
+				<section v-else-if="activeTab === 'presence'" class="flex flex-col gap-3">
+					<div
+						class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-solid border-surface-5 bg-bg-raised p-5"
+					>
+						<div class="flex flex-col gap-1">
+							<h3 class="m-0 text-base font-bold text-contrast">
+								{{ formatMessage(messages.presenceVisibleTitle) }}
+							</h3>
+							<p class="m-0 text-xs text-secondary">
+								{{ formatMessage(messages.presenceVisibleHint) }}
+							</p>
+						</div>
+						<Toggle
+							:model-value="presenceVisible"
+							@update:model-value="onPresenceVisibleChange"
+						/>
+					</div>
+
+					<div v-if="loading.presence" class="flex items-center gap-2 text-sm text-secondary">
+						<SpinnerIcon class="size-4 animate-spin" />
+						{{ formatMessage(messages.loading) }}
+					</div>
+
+					<div
+						v-else-if="errors.presence"
+						class="flex flex-col items-start gap-3 rounded-2xl bg-bg-raised p-5"
+					>
+						<p class="m-0 text-sm text-secondary">{{ errors.presence }}</p>
+						<Button size="sm" type="outlined" @click="loadPresence">
+							{{ formatMessage(messages.retry) }}
+						</Button>
+					</div>
+
+					<div
+						v-else-if="!presenceList.length"
+						class="rounded-2xl bg-bg-raised p-6 text-sm text-secondary"
+					>
+						{{ formatMessage(messages.presenceEmpty) }}
+					</div>
+
+					<template v-else>
+						<article
+							v-for="(member, index) in presenceList"
+							:key="`${member.username}-${index}`"
+							class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-solid border-surface-5 bg-bg-raised p-5"
+						>
+							<div class="flex min-w-0 flex-col gap-1">
+								<h3 class="m-0 text-base font-bold text-contrast">{{ member.username }}</h3>
+								<p class="m-0 text-sm text-primary">
+									{{ member.instance_name || formatMessage(messages.presenceUnknownInstance) }}
+									<span v-if="member.mc_version">· {{ member.mc_version }}</span>
+								</p>
+							</div>
+							<span class="text-xs text-secondary">
+								{{
+									formatMessage(messages.presenceLastSeen, {
+										when: formatDate(member.last_seen) || '—',
+									})
+								}}
+							</span>
+						</article>
+					</template>
 				</section>
 			</template>
 		</div>

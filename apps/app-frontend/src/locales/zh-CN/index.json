@@ -689,6 +689,21 @@
 	"app.guild.pinned": {
 		"message": "置顶"
 	},
+	"app.guild.presence.empty": {
+		"message": "现在没有成员在线"
+	},
+	"app.guild.presence.last-seen": {
+		"message": "最后在线 {when}"
+	},
+	"app.guild.presence.unknown-instance": {
+		"message": "未知实例"
+	},
+	"app.guild.presence.visible-hint": {
+		"message": "关闭后你仍能看见别人，但成员列表里不会出现你。"
+	},
+	"app.guild.presence.visible-title": {
+		"message": "对成员显示我在线"
+	},
 	"app.guild.refresh": {
 		"message": "刷新"
 	},
@@ -727,6 +742,9 @@
 	},
 	"app.guild.tab.packs": {
 		"message": "整合包"
+	},
+	"app.guild.tab.presence": {
+		"message": "在线"
 	},
 	"app.guild.tab.servers": {
 		"message": "服务器"
