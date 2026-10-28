@@ -1911,6 +1911,69 @@
 	"app.screenshots.sort.oldest": {
 		"message": "Oldest"
 	},
+	"app.settings.about.app-name": {
+		"message": "ACL Launcher"
+	},
+	"app.settings.about.app-subtitle": {
+		"message": "AnjiuCraftLauncher · built for the Yingzhou guild"
+	},
+	"app.settings.about.brand-body": {
+		"message": "Yingzhou Guild · ANJIU · © 2026"
+	},
+	"app.settings.about.brand-title": {
+		"message": "Brand"
+	},
+	"app.settings.about.check-update": {
+		"message": "Check for updates"
+	},
+	"app.settings.about.checking": {
+		"message": "Checking…"
+	},
+	"app.settings.about.contributor-ai-role": {
+		"message": "AI model — launcher rewrite and features"
+	},
+	"app.settings.about.contributor-anjiu-role": {
+		"message": "Founder, product and design"
+	},
+	"app.settings.about.contributors-title": {
+		"message": "Contributors"
+	},
+	"app.settings.about.credits-body": {
+		"message": "Built on the open-source Modrinth launcher core and Tauri, together with every upstream dependency and its maintainers."
+	},
+	"app.settings.about.credits-title": {
+		"message": "Credits"
+	},
+	"app.settings.about.install-failed": {
+		"message": "The update could not be installed."
+	},
+	"app.settings.about.install-now": {
+		"message": "Update now"
+	},
+	"app.settings.about.installing": {
+		"message": "Downloading…"
+	},
+	"app.settings.about.maintainer-title": {
+		"message": "Maintainer"
+	},
+	"app.settings.about.restart-hint": {
+		"message": "Update installed — ACL will restart to apply it."
+	},
+	"app.settings.about.up-to-date": {
+		"message": "You are on the latest version."
+	},
+	"app.settings.about.update-disabled": {
+		"message": "This build has no update channel configured."
+	},
+	"app.settings.about.update-failed": {
+		"message": "Could not reach the update server. Try again later."
+	},
+	"app.settings.about.update-found": {
+		"message": "Version {version} is available (released {date})."
+	},
+	"app.settings.about.version-title": {
+		"message": "Version"
+	},
 	"app.settings.app-version": {
 		"message": "ACL {version}"
 	},
@@ -3153,6 +3216,9 @@
 	"app.settings.resource-management.store.verified": {
 		"message": "Verification complete"
 	},
+	"app.settings.sidebar.label.about": {
+		"message": "About"
+	},
 	"app.settings.sidebar.label.instance-defaults": {
 		"message": "Instance defaults"
 	},
@@ -3380,6 +3446,9 @@
 	},
 	"app.settings.synced-options.resource-packs.none-synced-yet": {
 		"message": "You haven't synced any resource packs yet"
+	},
+	"app.settings.tabs.about": {
+		"message": "About Launcher"
 	},
 	"app.settings.tabs.appearance": {
 		"message": "Appearance"
