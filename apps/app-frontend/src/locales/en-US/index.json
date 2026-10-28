@@ -1944,6 +1944,9 @@
 	"app.settings.about.credits-title": {
 		"message": "Credits"
 	},
+	"app.settings.about.detecting": {
+		"message": "Detecting the update channel…"
+	},
 	"app.settings.about.download-update": {
 		"message": "Download update"
 	},
