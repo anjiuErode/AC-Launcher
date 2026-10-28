@@ -308,6 +308,12 @@
 	"app.appearance-settings.unknown-pack-warning.title": {
 		"message": "安装未知整合包前提醒我"
 	},
+	"app.auth-servers.collapse": {
+		"message": "收起"
+	},
+	"app.auth-servers.expand": {
+		"message": "显示身份验证警告"
+	},
 	"app.auth-servers.unreachable.body": {
 		"message": "Minecraft 身份验证服务器现在可能无法使用。请检查你的网络连接，并稍后再试。"
 	},
@@ -680,11 +686,17 @@
 	"app.guild.pack.checksum": {
 		"message": "SHA-256"
 	},
+	"app.guild.pack.close": {
+		"message": "知道了"
+	},
 	"app.guild.pack.download": {
 		"message": "下载"
 	},
 	"app.guild.pack.extracted": {
 		"message": "已解压 {count} 个文件到新实例"
+	},
+	"app.guild.pack.import-local": {
+		"message": "导入本地整合包"
 	},
 	"app.guild.pack.install": {
 		"message": "安装"
@@ -694,6 +706,12 @@
 	},
 	"app.guild.pack.installing": {
 		"message": "正在安装…"
+	},
+	"app.guild.pack.reject-body": {
+		"message": "无法识别当前的导入操作。该压缩包内没有整合包清单（modrinth.index.json、manifest.json）或实例版本文件。"
+	},
+	"app.guild.pack.reject-title": {
+		"message": "无法导入"
 	},
 	"app.guild.pack.size": {
 		"message": "体积"

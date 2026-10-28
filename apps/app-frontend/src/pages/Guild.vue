@@ -12,11 +12,13 @@ import {
 import { Button, defineMessages, injectNotificationManager, Tabs, Toggle, useVIntl } from '@modrinth/ui'
 import { renderString } from '@modrinth/utils/parse'
 import { invoke } from '@tauri-apps/api/core'
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { Ref } from 'vue'
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import AddServerToInstanceModal from '@/components/ui/install_flow/AddServerToInstanceModal.vue'
+import ModalWrapper from '@/components/ui/modal/ModalWrapper.vue'
 import {
 	describeGuildError,
 	isGuildApiError,
@@ -29,6 +31,7 @@ import {
 } from '@/helpers/install'
 import type { InstanceLoader } from '@/helpers/types'
 import { injectAppEvents } from '@/providers/app-events'
+import { useRootBreadcrumb } from '@/shared/breadcrumbs'
 
 interface GuildMe {
 	user_id: string
@@ -255,6 +258,23 @@ const messages = defineMessages({
 		id: 'app.guild.pack.installing',
 		defaultMessage: 'Installing…',
 	},
+	importLocal: {
+		id: 'app.guild.pack.import-local',
+		defaultMessage: 'Import local pack',
+	},
+	rejectTitle: {
+		id: 'app.guild.pack.reject-title',
+		defaultMessage: 'Cannot import this pack',
+	},
+	rejectBody: {
+		id: 'app.guild.pack.reject-body',
+		defaultMessage:
+			'Cannot recognise the import operation. The archive contains no modpack manifest (modrinth.index.json, manifest.json) or instance version file.',
+	},
+	close: {
+		id: 'app.guild.pack.close',
+		defaultMessage: 'OK',
+	},
 	installUnknown: {
 		id: 'app.guild.pack.unknown',
 		defaultMessage: 'Could not detect the Minecraft version in this pack',
@@ -292,6 +312,16 @@ const messages = defineMessages({
 		defaultMessage: 'Member',
 	},
 })
+
+// 面包屑必须由页面自己注册，否则会沿用上一页的残留（实测停在「Skin selector」）
+const breadcrumb = useRootBreadcrumb({
+	slot: 'root',
+	id: 'guild',
+	label: formatMessage(messages.title),
+	to: '/guild',
+	visual: { type: 'icon', component: UsersIcon },
+})
+onActivated(breadcrumb.reset)
 
 const tabs = computed(() => [
 	{
@@ -562,51 +592,7 @@ async function installPack(pack: GuildPack): Promise<void> {
 			{ url: pack.url, sha256: pack.sha256 ?? '', filename },
 		)
 
-		if (file.format === 'mrpack') {
-			await install_create_modpack_instance({ type: 'fromFile', path: file.path })
-			return
-		}
-
-		// 实例归档 / CurseForge 包：先探测版本与加载器，探不到就不创建，避免建出起不来的实例
-		const inspection = await invoke<{
-			format: string
-			mc_version: string | null
-			loader: string | null
-			loader_version: string | null
-			root_prefix: string
-		}>('guild_inspect_pack', { path: file.path })
-
-		if (!inspection.mc_version || inspection.format === 'unknown') {
-			addNotification({
-				type: 'warning',
-				title: pack.name,
-				text: formatMessage(messages.installUnknown),
-			})
-			return
-		}
-
-		const job = await install_create_instance({
-			name: pack.name,
-			gameVersion: inspection.mc_version,
-			loader: (inspection.loader as InstanceLoader) ?? 'vanilla',
-			loaderVersion: inspection.loader_version,
-			iconPath: null,
-			iconConfig: null,
-			link: null,
-		})
-		const finished = await wait_for_install_job(appEvents, job.job_id)
-		if (!finished.instance_id) throw new Error('instance id missing after creation')
-
-		const count = await invoke<number>('guild_extract_pack', {
-			path: file.path,
-			instanceId: finished.instance_id,
-			rootPrefix: inspection.root_prefix,
-		})
-		addNotification({
-			type: 'success',
-			title: pack.name,
-			text: `${formatMessage(messages.installDone)}\n${formatMessage(messages.installExtracted, { count })}`,
-		})
+		await runPackInstall(file.path, pack.name, file.format)
 	} catch (error) {
 		const message = await handleRequestError(
 			error,
@@ -615,6 +601,85 @@ async function installPack(pack: GuildPack): Promise<void> {
 		addNotification({ type: 'error', title: pack.name, text: message })
 	} finally {
 		installingPackId.value = null
+	}
+}
+
+/** 无法识别时的拒绝弹窗（对齐 PCL2：直接拒绝并说明，不让用户去猜版本） */
+const packRejectModal = ref()
+
+function rejectPack(): void {
+	packRejectModal.value?.show()
+}
+
+/**
+ * 包安装的统一实现：下载安装与本地导入共用。
+ * `format` 来自 Rust 探测（download 阶段已知），本地导入时传空由这里再探一次。
+ */
+async function runPackInstall(path: string, name: string, format = ''): Promise<void> {
+	let kind = format
+	if (!kind) {
+		const inspected = await invoke<{ format: string }>('guild_inspect_pack', { path })
+		kind = inspected.format
+	}
+
+	if (kind === 'mrpack') {
+		await install_create_modpack_instance({ type: 'fromFile', path })
+		return
+	}
+
+	// CurseForge 清单 / 实例归档：先探测版本与加载器，探不到就拒绝，绝不建半成品实例
+	const inspection = await invoke<{
+		format: string
+		mc_version: string | null
+		loader: string | null
+		loader_version: string | null
+		root_prefix: string
+	}>('guild_inspect_pack', { path })
+
+	if (!inspection.mc_version || inspection.format === 'unknown') {
+		rejectPack()
+		return
+	}
+
+	const job = await install_create_instance({
+		name,
+		gameVersion: inspection.mc_version,
+		loader: (inspection.loader as InstanceLoader) ?? 'vanilla',
+		loaderVersion: inspection.loader_version,
+		iconPath: null,
+		iconConfig: null,
+		link: null,
+	})
+	const finished = await wait_for_install_job(appEvents, job.job_id)
+	if (!finished.instance_id) throw new Error('instance id missing after creation')
+
+	const count = await invoke<number>('guild_extract_pack', {
+		path,
+		instanceId: finished.instance_id,
+		rootPrefix: inspection.root_prefix,
+	})
+	addNotification({
+		type: 'success',
+		title: name,
+		text: `${formatMessage(messages.installDone)}\n${formatMessage(messages.installExtracted, { count })}`,
+	})
+}
+
+/** 主动导入本地整合包（.mrpack / .zip） */
+async function importLocalPack(): Promise<void> {
+	const picked = await openFileDialog({
+		multiple: false,
+		filters: [{ name: 'Modpack', extensions: ['mrpack', 'zip'] }],
+	})
+	if (!picked || Array.isArray(picked)) return
+
+	const path = String(picked)
+	const name = path.split(/[\\/]/).pop()?.replace(/\.(mrpack|zip)$/i, '') || 'Imported pack'
+	try {
+		await runPackInstall(path, name)
+	} catch (error) {
+		const message = await handleRequestError(error, formatMessage(messages.unavailable))
+		addNotification({ type: 'error', title: name, text: message })
 	}
 }
 
@@ -836,6 +901,11 @@ async function openPack(pack: GuildPack): Promise<void> {
 				</section>
 
 				<section v-else-if="activeTab === 'packs'" class="flex flex-col gap-3">
+					<div class="flex justify-end">
+						<Button size="sm" type="outlined" @click="importLocalPack">
+							{{ formatMessage(messages.importLocal) }}
+						</Button>
+					</div>
 					<div v-if="loading.packs" class="flex items-center gap-2 text-sm text-secondary">
 						<SpinnerIcon class="size-4 animate-spin" />
 						{{ formatMessage(messages.loading) }}
@@ -1051,5 +1121,16 @@ async function openPack(pack: GuildPack): Promise<void> {
 		</div>
 
 		<AddServerToInstanceModal ref="addServerModal" />
+
+		<ModalWrapper ref="packRejectModal" :header="formatMessage(messages.rejectTitle)">
+			<div class="flex max-w-[420px] flex-col gap-4">
+				<p class="m-0 text-sm text-secondary">{{ formatMessage(messages.rejectBody) }}</p>
+				<div class="flex justify-end">
+					<Button @click="packRejectModal?.hide()">
+						{{ formatMessage(messages.close) }}
+					</Button>
+				</div>
+			</div>
+		</ModalWrapper>
 	</div>
 </template>

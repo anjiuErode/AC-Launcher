@@ -216,6 +216,12 @@
 	"app.appearance-settings.unknown-pack-warning.title": {
 		"message": "Warn me before installing unknown modpacks"
 	},
+	"app.auth-servers.collapse": {
+		"message": "Hide"
+	},
+	"app.auth-servers.expand": {
+		"message": "Show authentication warning"
+	},
 	"app.auth-servers.unreachable.body": {
 		"message": "Minecraft authentication servers may be down right now. Check your internet connection and try again later."
 	},
@@ -588,11 +594,17 @@
 	"app.guild.pack.checksum": {
 		"message": "SHA-256"
 	},
+	"app.guild.pack.close": {
+		"message": "OK"
+	},
 	"app.guild.pack.download": {
 		"message": "Download"
 	},
 	"app.guild.pack.extracted": {
 		"message": "Extracted {count} files into the new instance"
+	},
+	"app.guild.pack.import-local": {
+		"message": "Import local pack"
 	},
 	"app.guild.pack.install": {
 		"message": "Install"
@@ -602,6 +614,12 @@
 	},
 	"app.guild.pack.installing": {
 		"message": "Installing…"
+	},
+	"app.guild.pack.reject-body": {
+		"message": "Cannot recognise the import operation. The archive contains no modpack manifest (modrinth.index.json, manifest.json) or instance version file."
+	},
+	"app.guild.pack.reject-title": {
+		"message": "Cannot import this pack"
 	},
 	"app.guild.pack.size": {
 		"message": "Size"
