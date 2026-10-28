@@ -73,6 +73,7 @@ import { useCheckDisableMouseover } from '@/composables/macCssFix.js'
 import { useAppEvent } from '@/composables/use-app-event'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { useError } from '@/composables/use-error.js'
+import { useGuildPresenceSync } from '@/composables/use-guild-presence'
 import { useGuildSession } from '@/composables/use-guild-session'
 import { useInstanceMetadataRefresh } from '@/composables/use-instance-metadata-refresh'
 import { useQuickInstanceLimit } from '@/composables/use-quick-instance-limit.ts'
@@ -171,6 +172,8 @@ const router = useRouter()
 const route = useRoute()
 const { channel: appEventChannel, events: appEvents } = setupAppEventsProvider()
 useInstanceMetadataRefresh(appEvents)
+// 公会在线：把「在玩哪个实例」同步给后台心跳
+useGuildPresenceSync()
 const breadcrumbManager = createBreadcrumbManager()
 provideBreadcrumbManager(breadcrumbManager)
 const APP_LEFT_NAV_WIDTH = '4rem'

@@ -597,6 +597,21 @@
 	"app.guild.pinned": {
 		"message": "Pinned"
 	},
+	"app.guild.presence.empty": {
+		"message": "Nobody is online right now"
+	},
+	"app.guild.presence.last-seen": {
+		"message": "Last seen {when}"
+	},
+	"app.guild.presence.unknown-instance": {
+		"message": "Unknown instance"
+	},
+	"app.guild.presence.visible-hint": {
+		"message": "When off, you can still see others but won't appear in the member list."
+	},
+	"app.guild.presence.visible-title": {
+		"message": "Show me as online"
+	},
 	"app.guild.refresh": {
 		"message": "Refresh"
 	},
@@ -635,6 +650,9 @@
 	},
 	"app.guild.tab.packs": {
 		"message": "Modpacks"
+	},
+	"app.guild.tab.presence": {
+		"message": "Online"
 	},
 	"app.guild.tab.servers": {
 		"message": "Servers"
