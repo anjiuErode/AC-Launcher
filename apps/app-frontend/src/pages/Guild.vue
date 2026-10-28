@@ -22,7 +22,13 @@ import {
 	isGuildApiError,
 	useGuildSession,
 } from '@/composables/use-guild-session'
-import { install_create_modpack_instance } from '@/helpers/install'
+import {
+	install_create_instance,
+	install_create_modpack_instance,
+	wait_for_install_job,
+} from '@/helpers/install'
+import type { InstanceLoader } from '@/helpers/types'
+import { injectAppEvents } from '@/providers/app-events'
 
 interface GuildMe {
 	user_id: string
@@ -249,9 +255,17 @@ const messages = defineMessages({
 		id: 'app.guild.pack.installing',
 		defaultMessage: 'Installing…',
 	},
-	installZipPending: {
-		id: 'app.guild.pack.zip-pending',
-		defaultMessage: 'Instance-archive packs are not supported yet',
+	installUnknown: {
+		id: 'app.guild.pack.unknown',
+		defaultMessage: 'Could not detect the Minecraft version in this pack',
+	},
+	installDone: {
+		id: 'app.guild.pack.installed',
+		defaultMessage: 'Pack installed as a new instance',
+	},
+	installExtracted: {
+		id: 'app.guild.pack.extracted',
+		defaultMessage: 'Extracted {count} files into the new instance',
 	},
 	joinServer: {
 		id: 'app.guild.server.join',
@@ -530,6 +544,7 @@ async function openAttachment(
 /** 正在安装的整合包 id，用于按钮 loading 与防重复点击 */
 const installingPackId = ref<string | null>(null)
 const { addNotification } = injectNotificationManager()
+const appEvents = injectAppEvents()
 
 /**
  * 一键安装公会整合包：下载 → SHA256 校验 → 按格式分流。
@@ -547,16 +562,51 @@ async function installPack(pack: GuildPack): Promise<void> {
 			{ url: pack.url, sha256: pack.sha256 ?? '', filename },
 		)
 
-		if (file.format === 'zip') {
+		if (file.format === 'mrpack') {
+			await install_create_modpack_instance({ type: 'fromFile', path: file.path })
+			return
+		}
+
+		// 实例归档 / CurseForge 包：先探测版本与加载器，探不到就不创建，避免建出起不来的实例
+		const inspection = await invoke<{
+			format: string
+			mc_version: string | null
+			loader: string | null
+			loader_version: string | null
+			root_prefix: string
+		}>('guild_inspect_pack', { path: file.path })
+
+		if (!inspection.mc_version || inspection.format === 'unknown') {
 			addNotification({
 				type: 'warning',
 				title: pack.name,
-				text: formatMessage(messages.installZipPending),
+				text: formatMessage(messages.installUnknown),
 			})
 			return
 		}
 
-		await install_create_modpack_instance({ type: 'fromFile', path: file.path })
+		const job = await install_create_instance({
+			name: pack.name,
+			gameVersion: inspection.mc_version,
+			loader: (inspection.loader as InstanceLoader) ?? 'vanilla',
+			loaderVersion: inspection.loader_version,
+			iconPath: null,
+			iconConfig: null,
+			link: null,
+		})
+		const finished = await wait_for_install_job(appEvents, job.job_id)
+		if (!finished.instance_id) throw new Error('instance id missing after creation')
+
+		const count = await invoke<number>('guild_extract_pack', {
+			path: file.path,
+			instanceId: finished.instance_id,
+			rootPrefix: inspection.root_prefix,
+		})
+		addNotification({
+			type: 'success',
+			title: pack.name,
+			text: `${formatMessage(messages.installDone)}\n${formatMessage(messages.installExtracted, { count })}`,
+		})
 	} catch (error) {
 		const message = await handleRequestError(
 			error,

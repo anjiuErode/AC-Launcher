@@ -591,8 +591,14 @@
 	"app.guild.pack.download": {
 		"message": "Download"
 	},
+	"app.guild.pack.extracted": {
+		"message": "Extracted {count} files into the new instance"
+	},
 	"app.guild.pack.install": {
 		"message": "Install"
+	},
+	"app.guild.pack.installed": {
+		"message": "Pack installed as a new instance"
 	},
 	"app.guild.pack.installing": {
 		"message": "Installing…"
@@ -600,8 +606,8 @@
 	"app.guild.pack.size": {
 		"message": "Size"
 	},
-	"app.guild.pack.zip-pending": {
-		"message": "This pack is an instance archive, which is not supported yet"
+	"app.guild.pack.unknown": {
+		"message": "Could not detect the Minecraft version in this pack"
 	},
 	"app.guild.pinned": {
 		"message": "Pinned"
