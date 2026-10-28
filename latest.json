@@ -1,11 +1,11 @@
 {
-	"version": "0.1.42",
-	"notes": "修复启动假死；新增「关于 Launcher」；更新检查改为统一流程，失败不再中断轮询。",
-	"pub_date": "2026-10-28T13:47:49Z",
+	"version": "1.0.0-pre",
+	"notes": "公会服一键加入、整合包一键安装（mrpack / CurseForge / 实例归档 zip）、本地导入；警告收进标题栏；修复面包屑残留。",
+	"pub_date": "2026-10-28T18:38:02Z",
 	"platforms": {
 		"windows-x86_64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcmlnTm9sLzVsQnBiSURRN016bkkyZEdjM2lHREcrM2Q4VGgrZmNDTVlQYWdPY1ZqV2VPMkpUL1I1MnpuQXM5MHZSVGk5MS8xSFIwSVlIN0JlUU1SbndvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMTk0NDA4CWZpbGU6QUNMXzAuMS40Ml94NjQtc2V0dXAuZXhlCloxamZtYmRnNnhheDVwUUo3QlY2VENNYTVKdHZqSmtlZlVYeXp5Y0JNeGxsRk9wU0tNYlNyTU5iUHBXUWF0bW9PR2M3R1hCVmtMNjBrRjNOZFg3SEN3PT0K",
-			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_0.1.42_x64-setup.exe"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcmpKc202WE5aR3BZdTUwMjNQdGphblVmZitDVDlMVHpkU21STnR2dFFlcCtSNm5pdUZCc0ZCT3ArWnB2NDdKSXRDYi95OHZodE9oMnh4YWhvUjZMOVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjEyMDYxCWZpbGU6QUNMXzEuMC4wLXByZV94NjQtc2V0dXAuZXhlCkJSY1FUajlHQzlHaldwenRIZkFOQ2h4dS9adFlJbmVqbWpUb0JSMjRqTmkxbkxXTWhQcXliYVN1VXdEZFhUYUU2bzBKbkRGZGZMSks4N05YRjI2ZkNBPT0K",
+			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_1.0.0-pre_x64-setup.exe"
 		}
 	}
 }
