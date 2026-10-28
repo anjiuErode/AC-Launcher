@@ -308,12 +308,6 @@
 	"app.appearance-settings.unknown-pack-warning.title": {
 		"message": "安装未知整合包前提醒我"
 	},
-	"app.auth-servers.collapse": {
-		"message": "收起"
-	},
-	"app.auth-servers.expand": {
-		"message": "显示身份验证警告"
-	},
 	"app.auth-servers.unreachable.body": {
 		"message": "Minecraft 身份验证服务器现在可能无法使用。请检查你的网络连接，并稍后再试。"
 	},
@@ -517,6 +511,9 @@
 	},
 	"app.download-manager.verifying": {
 		"message": "正在验证"
+	},
+	"app.error.copy": {
+		"message": "复制报错信息"
 	},
 	"app.error.state-init.open-backups-folder": {
 		"message": "打开备份文件夹"
@@ -3991,6 +3988,9 @@
 	},
 	"app.user.project.install-to-instance": {
 		"message": "在实例上安装"
+	},
+	"app.warnings.title": {
+		"message": "警告"
 	},
 	"app.welcome-screen.create-instance": {
 		"message": "创建一个实例"

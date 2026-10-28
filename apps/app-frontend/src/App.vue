@@ -12,6 +12,7 @@ import {
 	SpinnerIcon,
 	UserIcon,
 	UsersIcon,
+	XIcon,
 } from '@modrinth/assets'
 import {
 	Admonition,
@@ -149,6 +150,7 @@ import {
 	openAppUpdateChangelog,
 	setAppUpdateActions,
 } from '@/providers/app-update.ts'
+import { appWarnings } from '@/providers/app-warnings'
 import { createContentInstall, provideContentInstall } from '@/providers/content-install'
 import {
 	provideAppUpdateDownloadProgress,
@@ -391,6 +393,24 @@ useQueries({
 })
 
 const criticalErrorMessage = ref()
+// 报错可以手动关掉，但出现新报错时重新展示
+const criticalErrorDismissed = ref(false)
+watch(criticalErrorMessage, () => {
+	criticalErrorDismissed.value = false
+})
+
+/** 复制报错信息：正文是渲染后的 HTML，先转纯文本再写剪贴板 */
+async function copyCriticalError() {
+	const header = criticalErrorMessage.value?.header ?? ''
+	const body = criticalErrorMessage.value?.body ?? ''
+	let plain = body
+	try {
+		plain = new DOMParser().parseFromString(body, 'text/html').body.textContent ?? body
+	} catch {
+		// 解析失败就原样复制
+	}
+	await navigator.clipboard.writeText(`${header}\n\n${plain}`.trim())
+}
 
 const isMaximized = ref(false)
 const isFullscreen = ref(false)
@@ -412,20 +432,6 @@ const authServerQuery = useQuery({
 	refetchOnWindowFocus: false,
 })
 
-// 认证服务器不可用是常驻状态，允许用户收起；收起了就记住，避免每次启动都顶在页面上
-const AUTH_WARNING_COLLAPSED_KEY = 'acl-auth-warning-collapsed'
-const authWarningCollapsed = ref(localStorage.getItem(AUTH_WARNING_COLLAPSED_KEY) === '1')
-
-function collapseAuthWarning() {
-	authWarningCollapsed.value = true
-	localStorage.setItem(AUTH_WARNING_COLLAPSED_KEY, '1')
-}
-
-function expandAuthWarning() {
-	authWarningCollapsed.value = false
-	localStorage.removeItem(AUTH_WARNING_COLLAPSED_KEY)
-}
-
 const authUnreachable = computed(() => {
 	if (authServerQuery.isError.value && !authServerQuery.isLoading.value) {
 		console.warn('Failed to reach auth servers', authServerQuery.error.value)
@@ -433,6 +439,24 @@ const authUnreachable = computed(() => {
 	}
 	return false
 })
+
+// 黄色警告统一汇总到标题栏的 ⚠️ 入口，不再占用页面高度
+watch(
+	authUnreachable,
+	(unreachable) => {
+		if (unreachable) {
+			appWarnings.set({
+				id: 'auth-servers',
+				title: formatMessage(messages.authUnreachableHeader),
+				body: formatMessage(messages.authUnreachableBody),
+			})
+		} else {
+			appWarnings.clear('auth-servers')
+		}
+	},
+	{ immediate: true },
+)
+
 
 let unlistenEditMenu
 
@@ -491,14 +515,12 @@ const messages = defineMessages({
 		id: 'app.auth-servers.unreachable.header',
 		defaultMessage: 'Cannot reach authentication servers',
 	},
-	authWarningCollapse: {
-		id: 'app.auth-servers.collapse',
-		defaultMessage: 'Hide',
+	copyError: {
+		id: 'app.error.copy',
+		defaultMessage: 'Copy error',
 	},
-	authWarningExpand: {
-		id: 'app.auth-servers.expand',
-		defaultMessage: 'Show authentication warning',
-	},
+
+
 	authUnreachableBody: {
 		id: 'app.auth-servers.unreachable.body',
 		defaultMessage:
@@ -1979,7 +2001,7 @@ onMounted(refreshGuildSession)
 				}"
 			></div>
 			<Admonition
-				v-if="criticalErrorMessage"
+				v-if="criticalErrorMessage && !criticalErrorDismissed"
 				type="critical"
 				:header="criticalErrorMessage.header"
 				class="m-6 mb-0"
@@ -1988,32 +2010,16 @@ onMounted(refreshGuildSession)
 					class="markdown-body text-primary"
 					v-html="renderString(criticalErrorMessage.body ?? '')"
 				></div>
-			</Admonition>
-			<div
-				v-if="authUnreachable && !authWarningCollapsed"
-				class="m-6 mb-0 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-solid border-surface-5 bg-bg-raised px-4 py-3"
-			>
-				<div class="flex min-w-0 flex-col gap-1">
-					<span class="text-sm font-semibold text-contrast">
-						{{ formatMessage(messages.authUnreachableHeader) }}
-					</span>
-					<span class="text-sm text-secondary">
-						{{ formatMessage(messages.authUnreachableBody) }}
-					</span>
+				<div class="mt-3 flex items-center justify-end gap-2">
+					<Button size="sm" type="outlined" class="!text-red" @click="copyCriticalError">
+						{{ formatMessage(messages.copyError) }}
+					</Button>
+					<Button size="sm" type="outlined" @click="criticalErrorDismissed = true">
+						<XIcon class="size-4" />
+					</Button>
 				</div>
-				<Button size="sm" type="outlined" @click="collapseAuthWarning">
-					{{ formatMessage(messages.authWarningCollapse) }}
-				</Button>
-			</div>
-			<div v-else-if="authUnreachable" class="m-6 mb-0 flex justify-end">
-				<button
-					type="button"
-					class="cursor-pointer rounded border-none bg-transparent p-0 text-xs text-secondary hover:text-contrast"
-					@click="expandAuthWarning"
-				>
-					{{ formatMessage(messages.authWarningExpand) }}
-				</button>
-			</div>
+			</Admonition>
+
 			<HostingUpdateRequired v-if="hostingUpdateRequired" />
 			<RouterView v-else v-slot="{ Component }">
 				<template v-if="Component">

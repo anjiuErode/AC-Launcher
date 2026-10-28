@@ -1,5 +1,28 @@
 <template>
 	<div class="flex gap-2 items-center">
+		<!-- 所有黄色警告汇总到这里，避免常驻横幅挤占界面；报错不在此列，仍单独展示 -->
+		<div v-if="appWarnings.has.value" class="relative">
+			<button
+				type="button"
+				class="flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-solid border-surface-4 bg-transparent px-2 text-sm hover:bg-surface-4"
+				:title="formatMessage(messages.warningsTitle)"
+				@click="showWarnings = !showWarnings"
+			>
+				<TriangleAlertIcon class="size-4 text-orange" aria-hidden="true" />
+				<span v-if="appWarnings.count.value > 1" class="text-xs text-secondary">
+					{{ appWarnings.count.value }}
+				</span>
+			</button>
+			<div
+				v-if="showWarnings"
+				class="absolute right-0 top-full z-50 mt-2 flex max-h-80 w-80 flex-col gap-3 overflow-y-auto rounded-xl border border-solid border-surface-5 bg-bg-raised p-3 shadow-lg"
+			>
+				<div v-for="warning in appWarnings.list.value" :key="warning.id" class="flex flex-col gap-1">
+					<span class="text-sm font-semibold text-contrast">{{ warning.title }}</span>
+					<span class="text-xs text-secondary">{{ warning.body }}</span>
+				</div>
+			</div>
+		</div>
 		<DownloadManager />
 		<div v-if="downloadState.total > 0 || hasActiveLoadingBars" class="relative">
 			<IconButton
@@ -129,6 +152,7 @@ import {
 	StarIcon,
 	StopCircleIcon,
 	TerminalSquareIcon,
+	TriangleAlertIcon,
 	UnplugIcon,
 } from '@modrinth/assets'
 import {
@@ -154,10 +178,12 @@ import { get_all as getRunningProcesses, kill as killProcess } from '@/helpers/p
 import type { LoadingBar } from '@/helpers/state'
 import { progress_bars_list } from '@/helpers/state'
 import type { GameInstance } from '@/helpers/types'
+import { appWarnings } from '@/providers/app-warnings'
 
 const { handleError } = injectNotificationManager()
 const popupNotificationManager = injectPopupNotificationManager()
 const { formatMessage } = useVIntl()
+const showWarnings = ref(false)
 
 const router = useRouter()
 
@@ -170,6 +196,10 @@ interface RunningProcess {
 }
 
 const messages = defineMessages({
+	warningsTitle: {
+		id: 'app.warnings.title',
+		defaultMessage: 'Warnings',
+	},
 	offline: {
 		id: 'app.action-bar.offline',
 		defaultMessage: 'Offline',
