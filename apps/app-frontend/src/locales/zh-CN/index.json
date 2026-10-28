@@ -683,8 +683,17 @@
 	"app.guild.pack.download": {
 		"message": "下载"
 	},
+	"app.guild.pack.install": {
+		"message": "安装"
+	},
+	"app.guild.pack.installing": {
+		"message": "正在安装…"
+	},
 	"app.guild.pack.size": {
 		"message": "体积"
+	},
+	"app.guild.pack.zip-pending": {
+		"message": "该整合包是实例压缩包，当前版本暂不支持"
 	},
 	"app.guild.pinned": {
 		"message": "置顶"

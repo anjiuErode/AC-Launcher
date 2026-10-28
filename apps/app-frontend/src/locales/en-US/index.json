@@ -591,8 +591,17 @@
 	"app.guild.pack.download": {
 		"message": "Download"
 	},
+	"app.guild.pack.install": {
+		"message": "Install"
+	},
+	"app.guild.pack.installing": {
+		"message": "Installing…"
+	},
 	"app.guild.pack.size": {
 		"message": "Size"
+	},
+	"app.guild.pack.zip-pending": {
+		"message": "This pack is an instance archive, which is not supported yet"
 	},
 	"app.guild.pinned": {
 		"message": "Pinned"
