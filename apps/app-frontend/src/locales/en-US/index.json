@@ -1944,20 +1944,20 @@
 	"app.settings.about.credits-title": {
 		"message": "Credits"
 	},
-	"app.settings.about.install-failed": {
-		"message": "The update could not be installed."
+	"app.settings.about.download-update": {
+		"message": "Download update"
 	},
-	"app.settings.about.install-now": {
-		"message": "Update now"
+	"app.settings.about.downloaded-hint": {
+		"message": "Update downloaded. Restart to install it."
 	},
-	"app.settings.about.installing": {
+	"app.settings.about.downloading": {
 		"message": "Downloading…"
 	},
 	"app.settings.about.maintainer-title": {
 		"message": "Maintainer"
 	},
-	"app.settings.about.restart-hint": {
-		"message": "Update installed — ACL will restart to apply it."
+	"app.settings.about.restart-install": {
+		"message": "Restart and install"
 	},
 	"app.settings.about.up-to-date": {
 		"message": "You are on the latest version."
@@ -1969,7 +1969,7 @@
 		"message": "Could not reach the update server. Try again later."
 	},
 	"app.settings.about.update-found": {
-		"message": "Version {version} is available (released {date})."
+		"message": "Version {version} is available."
 	},
 	"app.settings.about.version-title": {
 		"message": "Version"
@@ -3845,6 +3845,9 @@
 	},
 	"app.synced-packs.resource-packs.title": {
 		"message": "Synced resource packs"
+	},
+	"app.update-check-failed": {
+		"message": "Could not check for updates. ACL will keep retrying in the background."
 	},
 	"app.update-popup.body.download-complete": {
 		"message": "ACL v{version} has finished downloading. Reload to update now, or automatically when you close ACL."

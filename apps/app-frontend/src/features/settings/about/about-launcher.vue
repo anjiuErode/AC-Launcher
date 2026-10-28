@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { Button, defineMessages, ProgressBar, useVIntl } from '@modrinth/ui'
 import { getVersion } from '@tauri-apps/api/app'
-import { invoke } from '@tauri-apps/api/core'
-import { check, type Update } from '@tauri-apps/plugin-updater'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+
+import {
+	appUpdateState,
+	checkForAppUpdate,
+	downloadAvailableAppUpdate,
+	installAvailableAppUpdate,
+} from '@/providers/app-update'
 
 const { formatMessage } = useVIntl()
 
@@ -34,7 +39,7 @@ const messages = defineMessages({
 	},
 	updateFound: {
 		id: 'app.settings.about.update-found',
-		defaultMessage: 'Version {version} is available (released {date}).',
+		defaultMessage: 'Version {version} is available.',
 	},
 	updateDisabled: {
 		id: 'app.settings.about.update-disabled',
@@ -44,21 +49,21 @@ const messages = defineMessages({
 		id: 'app.settings.about.update-failed',
 		defaultMessage: 'Could not reach the update server. Try again later.',
 	},
-	installNow: {
-		id: 'app.settings.about.install-now',
-		defaultMessage: 'Update now',
+	downloadUpdate: {
+		id: 'app.settings.about.download-update',
+		defaultMessage: 'Download update',
 	},
-	installing: {
-		id: 'app.settings.about.installing',
+	downloading: {
+		id: 'app.settings.about.downloading',
 		defaultMessage: 'Downloading…',
 	},
-	installFailed: {
-		id: 'app.settings.about.install-failed',
-		defaultMessage: 'The update could not be installed.',
+	restartInstall: {
+		id: 'app.settings.about.restart-install',
+		defaultMessage: 'Restart and install',
 	},
-	restartHint: {
-		id: 'app.settings.about.restart-hint',
-		defaultMessage: 'Update installed — ACL will restart to apply it.',
+	downloadedHint: {
+		id: 'app.settings.about.downloaded-hint',
+		defaultMessage: 'Update downloaded. Restart to install it.',
 	},
 	contributorsTitle: {
 		id: 'app.settings.about.contributors-title',
@@ -96,80 +101,61 @@ const messages = defineMessages({
 })
 
 const version = ref('')
-const updatesEnabled = ref(true)
-const checking = ref(false)
-const installing = ref(false)
-const progress = ref(0)
-const available = ref<Update | null>(null)
-/** 检查结果的一句话提示；null 表示还没点过 */
-const status = ref<string | null>(null)
-const statusKind = ref<'info' | 'error'>('info')
+
+// 全部来自共享更新状态：与主界面自动检查是同一个任务，不会重复下载
+const updatesEnabled = computed(() => appUpdateState.updatesEnabled.value)
+const checking = computed(() => appUpdateState.checking.value)
+const downloading = computed(() => appUpdateState.downloading.value)
+const downloaded = computed(() => appUpdateState.finishedDownloading.value)
+const progress = computed(() => appUpdateState.progress.value)
+const available = computed(() => appUpdateState.availableUpdate.value)
+const checkError = computed(() => appUpdateState.checkError.value)
+
+/** 手动检查的结果文案；null 表示本次尚未检查 */
+const manualResult = ref<string | null>(null)
+const manualResultIsError = ref(false)
 
 onMounted(async () => {
 	version.value = await getVersion().catch(() => '')
-	updatesEnabled.value = await invoke<boolean>('are_updates_enabled').catch(() => false)
 })
 
-function setStatus(message: string, kind: 'info' | 'error' = 'info') {
-	status.value = message
-	statusKind.value = kind
+function setResult(message: string, isError = false) {
+	manualResult.value = message
+	manualResultIsError.value = isError
 }
 
 async function checkNow() {
 	if (!updatesEnabled.value) {
-		setStatus(formatMessage(messages.updateDisabled), 'error')
+		setResult(formatMessage(messages.updateDisabled), true)
 		return
 	}
 
-	checking.value = true
-	status.value = null
-	available.value = null
+	manualResult.value = null
 	try {
-		const update = await check()
+		const update = await checkForAppUpdate()
 		if (!update) {
-			setStatus(formatMessage(messages.upToDate))
+			setResult(formatMessage(messages.upToDate))
 			return
 		}
-		available.value = update
-		setStatus(
-			formatMessage(messages.updateFound, {
-				version: update.version,
-				date: update.date ? new Date(update.date).toLocaleDateString() : '—',
-			}),
-		)
+		setResult(formatMessage(messages.updateFound, { version: update.version }))
 	} catch {
-		setStatus(formatMessage(messages.updateFailed), 'error')
-	} finally {
-		checking.value = false
+		setResult(formatMessage(messages.updateFailed), true)
+	}
+}
+
+async function downloadNow() {
+	try {
+		await downloadAvailableAppUpdate()
+	} catch {
+		setResult(formatMessage(messages.updateFailed), true)
 	}
 }
 
 async function installNow() {
-	const update = available.value
-	if (!update) return
-
-	installing.value = true
-	progress.value = 0
 	try {
-		let total = 0
-		let downloaded = 0
-		await update.downloadAndInstall((event) => {
-			if (event.event === 'Started') {
-				total = event.data.contentLength ?? 0
-			} else if (event.event === 'Progress') {
-				downloaded += event.data.chunkLength
-				progress.value = total > 0 ? Math.min(100, (downloaded / total) * 100) : 0
-			} else if (event.event === 'Finished') {
-				progress.value = 100
-			}
-		})
-		setStatus(formatMessage(messages.restartHint))
-		// 安装完成后重启，让新版本接管
-		await invoke('restart_app')
+		await installAvailableAppUpdate()
 	} catch {
-		setStatus(formatMessage(messages.installFailed), 'error')
-	} finally {
-		installing.value = false
+		setResult(formatMessage(messages.updateFailed), true)
 	}
 }
 </script>
@@ -191,25 +177,38 @@ async function installNow() {
 				<span class="rounded-lg bg-bg-raised px-3 py-1.5 font-mono text-sm text-contrast">
 					v{{ version || '—' }}
 				</span>
-				<Button :disabled="checking || installing" @click="checkNow">
+				<Button :disabled="checking || downloading" @click="checkNow">
 					{{ checking ? formatMessage(messages.checking) : formatMessage(messages.checkUpdate) }}
 				</Button>
 			</div>
 
 			<p
-				v-if="status"
+				v-if="manualResult"
 				class="m-0 text-sm"
-				:class="statusKind === 'error' ? 'text-red' : 'text-secondary'"
+				:class="manualResultIsError ? 'text-red' : 'text-secondary'"
 			>
-				{{ status }}
+				{{ manualResult }}
 			</p>
+			<p v-else-if="checkError" class="m-0 text-sm text-red">{{ checkError }}</p>
 
-			<div v-if="available" class="flex flex-col gap-2">
-				<Button :disabled="installing" @click="installNow">
-					{{ installing ? formatMessage(messages.installing) : formatMessage(messages.installNow) }}
-				</Button>
-				<ProgressBar v-if="installing" :progress="progress" />
-			</div>
+			<template v-if="available">
+				<div class="flex flex-wrap items-center gap-3">
+					<Button v-if="!downloaded" :disabled="downloading" @click="downloadNow">
+						{{
+							downloading
+								? formatMessage(messages.downloading)
+								: formatMessage(messages.downloadUpdate)
+						}}
+					</Button>
+					<Button v-else @click="installNow">
+						{{ formatMessage(messages.restartInstall) }}
+					</Button>
+					<span v-if="downloaded" class="text-sm text-secondary">
+						{{ formatMessage(messages.downloadedHint) }}
+					</span>
+				</div>
+				<ProgressBar v-if="downloading" :progress="progress" />
+			</template>
 		</div>
 
 		<div class="flex flex-col gap-2.5">

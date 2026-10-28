@@ -2036,20 +2036,20 @@
 	"app.settings.about.credits-title": {
 		"message": "鸣谢"
 	},
-	"app.settings.about.install-failed": {
-		"message": "更新安装失败。"
+	"app.settings.about.download-update": {
+		"message": "下载更新"
 	},
-	"app.settings.about.install-now": {
-		"message": "立即更新"
+	"app.settings.about.downloaded-hint": {
+		"message": "更新已下载，重启后自动安装。"
 	},
-	"app.settings.about.installing": {
+	"app.settings.about.downloading": {
 		"message": "正在下载…"
 	},
 	"app.settings.about.maintainer-title": {
 		"message": "运维者"
 	},
-	"app.settings.about.restart-hint": {
-		"message": "更新已安装，启动器即将重启以生效。"
+	"app.settings.about.restart-install": {
+		"message": "立即重启安装"
 	},
 	"app.settings.about.up-to-date": {
 		"message": "当前已是最新版本。"
@@ -2061,7 +2061,7 @@
 		"message": "无法连接更新服务器，请稍后再试。"
 	},
 	"app.settings.about.update-found": {
-		"message": "发现新版本 {version}（发布于 {date}）。"
+		"message": "发现新版本 {version}。"
 	},
 	"app.settings.about.version-title": {
 		"message": "版本"
@@ -3913,6 +3913,9 @@
 	},
 	"app.synced-packs.resource-packs.title": {
 		"message": "同步的资源包"
+	},
+	"app.update-check-failed": {
+		"message": "更新检查失败，ACL 会在后台继续重试。"
 	},
 	"app.update-popup.body.download-complete": {
 		"message": "ACL v{version} 更新已下载完成！立即重启更新，或退出时自动安装。"

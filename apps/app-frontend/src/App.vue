@@ -537,6 +537,10 @@ const messages = defineMessages({
 		id: 'app.nav.remove-account',
 		defaultMessage: 'Remove account',
 	},
+	updateCheckFailed: {
+		id: 'app.update-check-failed',
+		defaultMessage: 'Could not check for updates. ACL will keep retrying in the background.',
+	},
 	restarting: {
 		id: 'app.restarting',
 		defaultMessage: 'Restarting...',
@@ -1281,6 +1285,7 @@ async function handleCommand(e) {
 	}
 }
 
+let updateCheckFailureNotified = false
 const appUpdateDownload = {
 	progress: appUpdateState.progress,
 	version: ref(),
@@ -1436,61 +1441,94 @@ function showDelayedUpdatePopup() {
 	markAppUpdatePopupShown(update.version, stage)
 }
 
+/** 释放上一次检查产生的 Update 资源，避免 5 分钟轮询不断累积句柄 */
+async function releaseUpdateResource(rid) {
+	if (typeof rid !== 'number') return
+	// 已进入下载/已下载完成的更新不能关，否则会打断安装
+	if (downloading.value || finishedDownloading.value) return
+	try {
+		await invoke('plugin:resources|close', { rid })
+	} catch (error) {
+		console.warn('Failed to release update resource:', error)
+	}
+}
+
+/**
+ * 单次检查。自动检查与「关于」页的手动检查共用这一个实现，
+ * 区别只在 autoDownload：手动检查不自动下载、不排弹窗。
+ */
+async function runUpdateCheck({ autoDownload } = { autoDownload: true }) {
+	const update = await invoke('plugin:updater|check')
+	if (!update) {
+		console.log('No update available')
+		return null
+	}
+
+	if (update.version === availableUpdate.value?.version) {
+		console.log('Update is already known')
+		if (autoDownload) scheduleDelayedUpdatePopup()
+		return availableUpdate.value
+	}
+
+	await releaseUpdateResource(availableUpdate.value?.rid)
+
+	appUpdateDownload.progress.value = 0
+	finishedDownloading.value = false
+	downloading.value = false
+	updateSize.value = null
+	availableUpdate.value = update
+
+	console.log(`Update ${update.version} is available.`)
+
+	metered.value = await isNetworkMetered()
+	if (!metered.value && autoDownload) {
+		console.log('Starting download of update')
+		downloadUpdate(update)
+	} else {
+		if (autoDownload) {
+			console.log('Metered connection detected, not auto-downloading update.')
+		}
+		markAppUpdateActionable(update.version)
+		if (autoDownload) scheduleDelayedUpdatePopup()
+	}
+
+	getUpdateSize(update.rid).then((size) => (updateSize.value = size))
+	return update
+}
+
 async function checkUpdates() {
-	if (!(await areUpdatesEnabled())) {
-		console.log('Skipping update check as updates are disabled in this build or environment')
-		updatesEnabled.value = false
+	try {
+		if (!(await areUpdatesEnabled())) {
+			console.log('Skipping update check as updates are disabled in this build or environment')
+			updatesEnabled.value = false
 
-		if (os.value === 'Linux' && !isDevEnvironment.value) {
-			checkLinuxUpdates()
-			setInterval(checkLinuxUpdates, 5 * 60 * 1000)
-		}
-		return
-	}
-
-	async function performCheck() {
-		const update = await invoke('plugin:updater|check')
-		if (!update) {
-			console.log('No update available')
+			if (os.value === 'Linux' && !isDevEnvironment.value) {
+				checkLinuxUpdates()
+				setInterval(checkLinuxUpdates, 5 * 60 * 1000)
+			}
 			return
 		}
 
-		const isExistingUpdate = update.version === availableUpdate.value?.version
-
-		if (isExistingUpdate) {
-			console.log('Update is already known')
-			scheduleDelayedUpdatePopup()
-			return
+		updatesEnabled.value = true
+		await runUpdateCheck({ autoDownload: true })
+	} catch (error) {
+		// 关键：检查失败也必须继续轮询，否则一次网络抖动会让更新检查永久失效
+		console.error('Update check failed:', error)
+		appUpdateState.checkError.value =
+			error instanceof Error ? error.message : String(error)
+		// 全局只提示一次：离线时每 5 分钟弹一次会变成骚扰
+		if (!updateCheckFailureNotified) {
+			updateCheckFailureNotified = true
+			handleError(new Error(formatMessage(messages.updateCheckFailed)))
 		}
-
-		appUpdateDownload.progress.value = 0
-		finishedDownloading.value = false
-		downloading.value = false
-		updateSize.value = null
-		availableUpdate.value = update
-
-		console.log(`Update ${update.version} is available.`)
-
-		metered.value = await isNetworkMetered()
-		if (!metered.value) {
-			console.log('Starting download of update')
-			downloadUpdate(update)
-		} else {
-			console.log(`Metered connection detected, not auto-downloading update.`)
-			markAppUpdateActionable(update.version)
-			scheduleDelayedUpdatePopup()
-		}
-
-		getUpdateSize(update.rid).then((size) => (updateSize.value = size))
+	} finally {
+		setTimeout(
+			() => {
+				checkUpdates()
+			},
+			5 /* min */ * 60 /* sec */ * 1000 /* ms */,
+		)
 	}
-
-	await performCheck()
-	setTimeout(
-		() => {
-			checkUpdates()
-		},
-		5 /* min */ * 60 /* sec */ * 1000 /* ms */,
-	)
 }
 
 async function checkLinuxUpdates() {
@@ -1583,6 +1621,7 @@ async function installUpdate() {
 }
 
 setAppUpdateActions({
+	check: () => runUpdateCheck({ autoDownload: false }),
 	download: downloadAvailableUpdate,
 	install: installUpdate,
 	changelog: () => openUrl('https://modrinth.com/news/changelog?filter=app'),

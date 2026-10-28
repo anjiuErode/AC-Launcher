@@ -21,6 +21,8 @@ interface UpdatePromptState {
 export type AppUpdatePromptStage = 'available' | 'downloaded'
 
 interface AppUpdateActions {
+	/** 手动检查：只探测，不触发自动下载；返回发现的更新或 null */
+	check?: () => Promise<AppUpdate | null>
 	download?: () => Promise<void> | void
 	install?: () => Promise<void> | void
 	changelog?: () => Promise<void> | void
@@ -33,7 +35,11 @@ const downloading = ref(false)
 const restarting = ref(false)
 const availableUpdate = ref<AppUpdate | null>(null)
 const updateSize = ref<number | null>(null)
-const updatesEnabled = ref(true)
+// 未完成能力探测前一律视为不可用，避免按钮提前可点
+const updatesEnabled = ref(false)
+const checking = ref(false)
+/** 最近一次检查的失败原因，供界面展示；null 表示无错误 */
+const checkError = ref<string | null>(null)
 
 let actions: AppUpdateActions = {}
 
@@ -50,6 +56,8 @@ export const appUpdateState = {
 	availableUpdate,
 	updateSize,
 	updatesEnabled,
+	checking,
+	checkError,
 	downloadProgress: computed(() => progress.value),
 	downloadPercent: computed(() => Math.trunc(progress.value * 100)),
 	isVisible: computed(() => !!availableUpdate.value && !restarting.value && updatesEnabled.value),
@@ -153,6 +161,23 @@ export function getNextAppUpdatePopupTime(
 
 export function setAppUpdateActions(nextActions: AppUpdateActions): void {
 	actions = nextActions
+}
+
+/**
+ * 手动触发一次检查（「关于」页用）。
+ * 与启动时的自动检查共用同一状态与同一个下载任务，不会产生第二条下载链路。
+ */
+export async function checkForAppUpdate(): Promise<AppUpdate | null> {
+	checking.value = true
+	checkError.value = null
+	try {
+		return (await actions.check?.()) ?? null
+	} catch (error) {
+		checkError.value = error instanceof Error ? error.message : String(error)
+		throw error
+	} finally {
+		checking.value = false
+	}
 }
 
 export async function downloadAvailableAppUpdate(): Promise<void> {
