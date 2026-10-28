@@ -473,11 +473,27 @@ fn main() {
             // 只 set_focus 对隐藏窗口无效（关闭到托盘后就是隐藏状态），
             // 用户会以为没启动成功，再点几次也没反应。
             if let Some(win) = app.get_window("main") {
-                if let Ok(false) = win.is_visible() {
-                    let _ = win.show();
+                match win.is_visible() {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        if let Err(error) = win.show() {
+                            tracing::warn!(
+                                "Failed to show the main window on second launch: {error}"
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            "Failed to read main window visibility: {error}"
+                        );
+                    }
                 }
-                let _ = win.unminimize();
-                let _ = win.set_focus();
+                if let Err(error) = win.unminimize() {
+                    tracing::warn!("Failed to unminimize the main window: {error}");
+                }
+                if let Err(error) = win.set_focus() {
+                    tracing::warn!("Failed to focus the main window: {error}");
+                }
             }
         }))
         .plugin(tauri_plugin_http::init())
@@ -594,14 +610,34 @@ fn main() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                    if let Some(win) = handle.get_window("main")
-                        && matches!(win.is_visible(), Ok(false))
-                    {
+                    let Some(win) = handle.get_window("main") else {
                         tracing::warn!(
-                            "Main window is still hidden 15s after startup; forcing it visible (frontend likely failed to mount)"
+                            "Startup watchdog found no main window to recover"
                         );
-                        let _ = win.show();
-                        let _ = win.set_focus();
+                        return;
+                    };
+                    match win.is_visible() {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            tracing::warn!(
+                                "Main window is still hidden 15s after startup; forcing it visible (frontend likely failed to mount)"
+                            );
+                            if let Err(error) = win.show() {
+                                tracing::error!(
+                                    "Startup watchdog failed to show the main window: {error}"
+                                );
+                            }
+                            if let Err(error) = win.set_focus() {
+                                tracing::warn!(
+                                    "Startup watchdog failed to focus the main window: {error}"
+                                );
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                "Startup watchdog could not read window visibility: {error}"
+                            );
+                        }
                     }
                 });
             }
