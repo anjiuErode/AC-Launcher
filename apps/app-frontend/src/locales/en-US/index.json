@@ -216,12 +216,6 @@
 	"app.appearance-settings.unknown-pack-warning.title": {
 		"message": "Warn me before installing unknown modpacks"
 	},
-	"app.auth-servers.collapse": {
-		"message": "Hide"
-	},
-	"app.auth-servers.expand": {
-		"message": "Show authentication warning"
-	},
 	"app.auth-servers.unreachable.body": {
 		"message": "Minecraft authentication servers may be down right now. Check your internet connection and try again later."
 	},
@@ -425,6 +419,9 @@
 	},
 	"app.download-manager.verifying": {
 		"message": "Verifying"
+	},
+	"app.error.copy": {
+		"message": "Copy error"
 	},
 	"app.error.state-init.open-backups-folder": {
 		"message": "Open backups folder"
@@ -3923,6 +3920,9 @@
 	},
 	"app.user.project.install-to-instance": {
 		"message": "Install to instance"
+	},
+	"app.warnings.title": {
+		"message": "Warnings"
 	},
 	"app.welcome-screen.create-instance": {
 		"message": "Create an instance"
