@@ -342,6 +342,22 @@ async fn guild_download_pack(
     guild::download_pack(&url, &sha256, &filename).await
 }
 
+/// 探测公会整合包的格式与内嵌版本信息（P4-2）
+#[tauri::command]
+async fn guild_inspect_pack(path: String) -> Result<guild::PackInspection, guild::GuildApiError> {
+    guild::inspect_pack(&path).await
+}
+
+/// 把整合包内容解压进指定实例目录（P4-2）
+#[tauri::command]
+async fn guild_extract_pack(
+    path: String,
+    instance_id: String,
+    root_prefix: String,
+) -> Result<usize, guild::GuildApiError> {
+    guild::extract_pack_into_instance(&path, &instance_id, &root_prefix).await
+}
+
 /// 立即上报一次（切换隐身、刚进游戏时用）
 #[tauri::command]
 async fn guild_report_presence(
@@ -742,6 +758,8 @@ fn main() {
             guild_set_presence_state,
             guild_report_presence,
             guild_download_pack,
+            guild_inspect_pack,
+            guild_extract_pack,
         ]);
 
     tracing::info!("Initializing app...");

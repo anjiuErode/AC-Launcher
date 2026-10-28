@@ -683,8 +683,14 @@
 	"app.guild.pack.download": {
 		"message": "下载"
 	},
+	"app.guild.pack.extracted": {
+		"message": "已解压 {count} 个文件到新实例"
+	},
 	"app.guild.pack.install": {
 		"message": "安装"
+	},
+	"app.guild.pack.installed": {
+		"message": "整合包已安装为新实例"
 	},
 	"app.guild.pack.installing": {
 		"message": "正在安装…"
@@ -692,8 +698,8 @@
 	"app.guild.pack.size": {
 		"message": "体积"
 	},
-	"app.guild.pack.zip-pending": {
-		"message": "该整合包是实例压缩包，当前版本暂不支持"
+	"app.guild.pack.unknown": {
+		"message": "无法从该整合包中识别出 Minecraft 版本"
 	},
 	"app.guild.pinned": {
 		"message": "置顶"

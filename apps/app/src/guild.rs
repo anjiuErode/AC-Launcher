@@ -768,3 +768,221 @@ pub async fn download_pack(
 		size_bytes: size,
 	})
 }
+
+// ---------------------------------------------------------------------------
+// 公会整合包：格式识别与解压入库（P4-2 的 zip 分支）
+//
+// 识别顺序参照 PCL2 的做法：能确定就确定，确定不了交给上层让用户选，
+// 绝不猜版本 —— 猜错会导致实例根本起不来。
+//   1. modrinth.index.json      → mrpack（交给既有安装流程）
+//   2. manifest.json            → CurseForge 导出包，含 minecraft.version 与 modLoaders
+//   3. versions/<id>/<id>.json  → 实例归档，id / inheritsFrom / libraries 可推版本与加载器
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, Default)]
+pub struct PackInspection {
+	/// mrpack | curseforge | instance | unknown
+	pub format: String,
+	pub mc_version: Option<String>,
+	pub loader: Option<String>,
+	pub loader_version: Option<String>,
+	/// 包内实例根的前缀，空串表示根目录即实例根，常见为 ".minecraft/"
+	pub root_prefix: String,
+	pub entry_count: usize,
+}
+
+fn normalize_loader(raw: &str) -> Option<(&'static str, String)> {
+	let lower = raw.to_ascii_lowercase();
+	for name in ["neoforge", "fabric", "quilt", "forge"] {
+		if let Some(rest) = lower.strip_prefix(&format!("{name}-")) {
+			return Some((name, rest.to_string()));
+		}
+	}
+	None
+}
+
+fn detect_loader_from_libraries(value: &serde_json::Value) -> Option<(&'static str, String)> {
+	let libraries = value.get("libraries")?.as_array()?;
+	for library in libraries {
+		let name = library.get("name")?.as_str()?;
+		if let Some((loader, version)) = normalize_loader(name) {
+			return Some((loader, version));
+		}
+	}
+	None
+}
+
+/// 读取 zip 内某个小文件（用于解析清单），超过 8 MB 直接放弃
+async fn read_zip_entry(
+	zip: &async_zip::tokio::read::fs::ZipFileReader,
+	index: usize,
+) -> Option<Vec<u8>> {
+	if zip.file().entries()[index].uncompressed_size() > 8 * 1024 * 1024 {
+		return None;
+	}
+	let mut bytes = Vec::new();
+	zip.reader_with_entry(index)
+		.await
+		.ok()?
+		.read_to_end_checked(&mut bytes)
+		.await
+		.ok()?;
+	Some(bytes)
+}
+
+/// 只探测，不落盘
+pub async fn inspect_pack(path: &str) -> Result<PackInspection, GuildApiError> {
+	let path_ref = std::path::Path::new(path);
+	let zip = async_zip::tokio::read::fs::ZipFileReader::new(path_ref)
+		.await
+		.map_err(|err| api_error("io", format!("无法读取整合包：{err}")))?;
+
+	let entries = zip.file().entries();
+	let mut inspection = PackInspection {
+		format: "unknown".to_string(),
+		entry_count: entries.len(),
+		root_prefix: String::new(),
+		..Default::default()
+	};
+
+	// 是否被包了一层 .minecraft/
+	if entries.iter().any(|entry| {
+		entry
+			.filename()
+			.as_str()
+			.is_ok_and(|name| name.starts_with(".minecraft/"))
+	}) {
+		inspection.root_prefix = ".minecraft/".to_string();
+	}
+
+	let mut modrinth_index = None;
+	let mut curseforge_manifest = None;
+	let mut version_json = None;
+
+	for (index, entry) in entries.iter().enumerate() {
+		let Ok(name) = entry.filename().as_str() else { continue };
+		match name {
+			"modrinth.index.json" => modrinth_index = Some(index),
+			"manifest.json" => curseforge_manifest = Some(index),
+			other => {
+				// versions/<id>/<id>.json
+				let parts: Vec<&str> = other.split('/').collect();
+				if parts.len() == 3 && parts[0] == "versions" && parts[2].ends_with(".json") {
+					let id = parts[1];
+					if parts[2] == format!("{id}.json") && version_json.is_none() {
+						version_json = Some(index);
+					}
+				}
+			}
+		}
+	}
+
+	if modrinth_index.is_some() {
+		inspection.format = "mrpack".to_string();
+		return Ok(inspection);
+	}
+
+	if let Some(index) = curseforge_manifest
+		&& let Some(bytes) = read_zip_entry(&zip, index).await
+		&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+	{
+		inspection.format = "curseforge".to_string();
+		if let Some(minecraft) = value.get("minecraft") {
+			inspection.mc_version = minecraft
+				.get("version")
+				.and_then(|v| v.as_str())
+				.map(str::to_string);
+			if let Some(first) = minecraft
+				.get("modLoaders")
+				.and_then(|v| v.as_array())
+				.and_then(|list| list.first())
+				.and_then(|v| v.get("id"))
+				.and_then(|v| v.as_str())
+				&& let Some((loader, version)) = normalize_loader(first)
+			{
+				inspection.loader = Some(loader.to_string());
+				inspection.loader_version = Some(version);
+			}
+		}
+		return Ok(inspection);
+	}
+
+	if let Some(index) = version_json
+		&& let Some(bytes) = read_zip_entry(&zip, index).await
+		&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+	{
+		inspection.format = "instance".to_string();
+		// inheritsFrom 存在时它才是原版版本号，id 往往带加载器后缀
+		inspection.mc_version = value
+			.get("inheritsFrom")
+			.and_then(|v| v.as_str())
+			.or_else(|| value.get("id").and_then(|v| v.as_str()))
+			.map(str::to_string);
+		if let Some((loader, version)) = detect_loader_from_libraries(&value) {
+			inspection.loader = Some(loader.to_string());
+			inspection.loader_version = Some(version);
+		}
+		return Ok(inspection);
+	}
+
+	Ok(inspection)
+}
+
+/// 把整合包内容解压到指定实例目录，返回写入的文件数
+pub async fn extract_pack_into_instance(
+	path: &str,
+	instance_id: &str,
+	root_prefix: &str,
+) -> Result<usize, GuildApiError> {
+	let zip = async_zip::tokio::read::fs::ZipFileReader::new(std::path::Path::new(path))
+		.await
+		.map_err(|err| api_error("io", format!("无法读取整合包：{err}")))?;
+
+	let target_root = theseus::instance::get_full_path(instance_id)
+		.await
+		.map_err(|err| api_error("not_found", format!("实例不存在：{err}")))?;
+
+	let mut written = 0usize;
+	for index in 0..zip.file().entries().len() {
+		let entry = &zip.file().entries()[index];
+		if entry.dir().is_ok_and(|dir| dir) {
+			continue;
+		}
+		let Ok(name) = entry.filename().as_str() else { continue };
+		let Some(relative) = name.strip_prefix(root_prefix) else { continue };
+		if relative.is_empty() {
+			continue;
+		}
+		// 防路径穿越：逐段校验，拒绝 ..、绝对路径与盘符
+		let mut target = target_root.clone();
+		let mut unsafe_path = false;
+		for segment in relative.split('/') {
+			if segment.is_empty() || segment == "." || segment == ".." || segment.contains(':') || segment.contains('\\') {
+				unsafe_path = true;
+				break;
+			}
+			target.push(segment);
+		}
+		if unsafe_path {
+			tracing::warn!("Skipping unsafe path in pack: {name}");
+			continue;
+		}
+
+		if let Some(parent) = target.parent() {
+			let _ = tokio::fs::create_dir_all(parent).await;
+		}
+		let mut bytes = Vec::new();
+		zip.reader_with_entry(index)
+			.await
+			.map_err(|err| api_error("io", format!("读取 {name} 失败：{err}")))?
+			.read_to_end_checked(&mut bytes)
+			.await
+			.map_err(|err| api_error("io", format!("解压 {name} 失败：{err}")))?;
+		tokio::fs::write(&target, &bytes)
+			.await
+			.map_err(|err| api_error("io", format!("写入 {name} 失败：{err}")))?;
+		written += 1;
+	}
+
+	Ok(written)
+}
