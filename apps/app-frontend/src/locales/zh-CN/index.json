@@ -2003,6 +2003,69 @@
 	"app.screenshots.sort.oldest": {
 		"message": "从旧到新"
 	},
+	"app.settings.about.app-name": {
+		"message": "ACL 启动器"
+	},
+	"app.settings.about.app-subtitle": {
+		"message": "AnjiuCraftLauncher · 瀛洲公会自用"
+	},
+	"app.settings.about.brand-body": {
+		"message": "瀛洲公会 · ANJIU · © 2026"
+	},
+	"app.settings.about.brand-title": {
+		"message": "品牌归属"
+	},
+	"app.settings.about.check-update": {
+		"message": "检查最新版本"
+	},
+	"app.settings.about.checking": {
+		"message": "检查中…"
+	},
+	"app.settings.about.contributor-ai-role": {
+		"message": "AI 模型，启动器改造与功能实现"
+	},
+	"app.settings.about.contributor-anjiu-role": {
+		"message": "项目发起人，产品与设计"
+	},
+	"app.settings.about.contributors-title": {
+		"message": "贡献者"
+	},
+	"app.settings.about.credits-body": {
+		"message": "本项目基于开源的 Modrinth 启动器内核与 Tauri 构建，并受益于全部上游依赖及其维护者。"
+	},
+	"app.settings.about.credits-title": {
+		"message": "鸣谢"
+	},
+	"app.settings.about.install-failed": {
+		"message": "更新安装失败。"
+	},
+	"app.settings.about.install-now": {
+		"message": "立即更新"
+	},
+	"app.settings.about.installing": {
+		"message": "正在下载…"
+	},
+	"app.settings.about.maintainer-title": {
+		"message": "运维者"
+	},
+	"app.settings.about.restart-hint": {
+		"message": "更新已安装，启动器即将重启以生效。"
+	},
+	"app.settings.about.up-to-date": {
+		"message": "当前已是最新版本。"
+	},
+	"app.settings.about.update-disabled": {
+		"message": "当前构建未接入更新通道。"
+	},
+	"app.settings.about.update-failed": {
+		"message": "无法连接更新服务器，请稍后再试。"
+	},
+	"app.settings.about.update-found": {
+		"message": "发现新版本 {version}（发布于 {date}）。"
+	},
+	"app.settings.about.version-title": {
+		"message": "版本"
+	},
 	"app.settings.app-version": {
 		"message": "ACL {version}"
 	},
@@ -3245,6 +3308,9 @@
 	"app.settings.resource-management.store.verified": {
 		"message": "验证完成"
 	},
+	"app.settings.sidebar.label.about": {
+		"message": "关于"
+	},
 	"app.settings.sidebar.label.instance-defaults": {
 		"message": "实例默认值"
 	},
@@ -3472,6 +3538,9 @@
 	},
 	"app.settings.synced-options.resource-packs.none-synced-yet": {
 		"message": "你尚未同步任何资源包"
+	},
+	"app.settings.tabs.about": {
+		"message": "关于 Launcher"
 	},
 	"app.settings.tabs.appearance": {
 		"message": "外观"

@@ -5,6 +5,7 @@ import { watch } from 'vue'
 import { useAppEvent } from '@/composables/use-app-event'
 import { get_many as getInstances } from '@/helpers/instance'
 import { get_all as getRunningProcesses } from '@/helpers/process'
+import type { AppEvents } from '@/providers/app-events'
 
 interface RunningProcess {
 	uuid: string
@@ -26,7 +27,7 @@ const runningKey = ['guild-presence-running'] as const
  * 心跳本身在 Rust 侧（30 秒一次），这里只负责在游戏启停、实例切换时
  * 更新那份状态；界面最小化后不再参与，也不会影响心跳。
  */
-export function useGuildPresenceSync() {
+export function useGuildPresenceSync(events: AppEvents) {
 	const queryClient = useQueryClient()
 
 	const { data } = useQuery({
@@ -49,9 +50,15 @@ export function useGuildPresenceSync() {
 		},
 	})
 
-	useAppEvent('process', () => {
-		void queryClient.invalidateQueries({ queryKey: runningKey })
-	})
+	// 必须显式传入事件总线：App.vue 里 provider 建立之前 inject 会抛
+	// "Injection Symbol(modrinth:appEvents) not found"，导致整个 setup 失败
+	useAppEvent(
+		'process',
+		() => {
+			void queryClient.invalidateQueries({ queryKey: runningKey })
+		},
+		events,
+	)
 
 	watch(
 		data,

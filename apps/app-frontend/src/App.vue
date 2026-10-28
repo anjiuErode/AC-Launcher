@@ -173,7 +173,7 @@ const route = useRoute()
 const { channel: appEventChannel, events: appEvents } = setupAppEventsProvider()
 useInstanceMetadataRefresh(appEvents)
 // 公会在线：把「在玩哪个实例」同步给后台心跳
-useGuildPresenceSync()
+useGuildPresenceSync(appEvents)
 const breadcrumbManager = createBreadcrumbManager()
 provideBreadcrumbManager(breadcrumbManager)
 const APP_LEFT_NAV_WIDTH = '4rem'

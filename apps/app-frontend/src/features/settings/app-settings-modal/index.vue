@@ -5,6 +5,7 @@ import {
 	EyeOffIcon,
 	GaugeIcon,
 	GlobeIcon,
+	InfoIcon,
 	LanguagesIcon,
 	LightBulbIcon,
 	PaintbrushIcon,
@@ -32,6 +33,7 @@ import { platform as getOsPlatform, version as getOsVersion } from '@tauri-apps/
 import { computed, ref } from 'vue'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
+import AboutLauncherSettings from '@/features/settings/about/about-launcher.vue'
 import GuildAccountSettings from '@/features/settings/account/guild-account-settings.vue'
 import PrivacySettings from '@/features/settings/account/privacy-settings.vue'
 import AppearanceSettings from '@/features/settings/display/appearance-settings.vue'
@@ -83,6 +85,10 @@ const tabCategories = defineMessages({
 	system: {
 		id: 'app.settings.sidebar.label.system',
 		defaultMessage: 'System',
+	},
+	about: {
+		id: 'app.settings.sidebar.label.about',
+		defaultMessage: 'About',
 	},
 })
 
@@ -220,6 +226,15 @@ const tabs = [
 		category: tabCategories.system,
 		icon: WrenchIcon,
 		content: TroubleshootingSettings,
+	},
+	{
+		name: defineMessage({
+			id: 'app.settings.tabs.about',
+			defaultMessage: 'About Launcher',
+		}),
+		category: tabCategories.about,
+		icon: InfoIcon,
+		content: AboutLauncherSettings,
 	},
 ]
 

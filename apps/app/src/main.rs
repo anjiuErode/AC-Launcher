@@ -469,7 +469,14 @@ fn main() {
                 ));
             }
 
+            // 重复启动时必须把已有窗口「还原并前置」：
+            // 只 set_focus 对隐藏窗口无效（关闭到托盘后就是隐藏状态），
+            // 用户会以为没启动成功，再点几次也没反应。
             if let Some(win) = app.get_window("main") {
+                if let Ok(false) = win.is_visible() {
+                    let _ = win.show();
+                }
+                let _ = win.unminimize();
                 let _ = win.set_focus();
             }
         }))
@@ -579,6 +586,25 @@ fn main() {
                     payload,
                 ));
             });
+
+            // 启动看门狗：窗口配置是 visible=false，正常由前端 onMounted 调 show_window。
+            // 一旦前端在 setup 阶段抛错（历史上出现过注入失败），onMounted 永远不会执行，
+            // 进程活着但窗口永不出现。这里兜底显示，让用户至少能看到界面或错误。
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    if let Some(win) = handle.get_window("main")
+                        && matches!(win.is_visible(), Ok(false))
+                    {
+                        tracing::warn!(
+                            "Main window is still hidden 15s after startup; forcing it visible (frontend likely failed to mount)"
+                        );
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                });
+            }
 
             // 公会在线心跳：界面负责推「在玩哪个实例」，这里负责每 30 秒上报一次。
             // 心跳放后台而不是 webview，是因为启动游戏后启动器默认最小化，
