@@ -2036,6 +2036,9 @@
 	"app.settings.about.credits-title": {
 		"message": "鸣谢"
 	},
+	"app.settings.about.detecting": {
+		"message": "正在检测更新通道…"
+	},
 	"app.settings.about.download-update": {
 		"message": "下载更新"
 	},

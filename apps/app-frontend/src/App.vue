@@ -1441,11 +1441,9 @@ function showDelayedUpdatePopup() {
 	markAppUpdatePopupShown(update.version, stage)
 }
 
-/** 释放上一次检查产生的 Update 资源，避免 5 分钟轮询不断累积句柄 */
-async function releaseUpdateResource(rid) {
+/** 关闭一个 Update 资源句柄，失败只记日志 */
+async function closeUpdateResource(rid) {
 	if (typeof rid !== 'number') return
-	// 已进入下载/已下载完成的更新不能关，否则会打断安装
-	if (downloading.value || finishedDownloading.value) return
 	try {
 		await invoke('plugin:resources|close', { rid })
 	} catch (error) {
@@ -1453,12 +1451,32 @@ async function releaseUpdateResource(rid) {
 	}
 }
 
+/** 释放被新结果替换掉的旧句柄；已进入下载/已完成的不关，否则会打断安装 */
+async function releaseUpdateResource(rid) {
+	if (typeof rid !== 'number') return
+	if (downloading.value || finishedDownloading.value) return
+	await closeUpdateResource(rid)
+}
+
 /**
- * 单次检查。自动检查与「关于」页的手动检查共用这一个实现，
- * 区别只在 autoDownload：手动检查不自动下载、不排弹窗。
+ * 探测更新的共享入口。
+ * 自动检查（启动 / 5 分钟轮询）与「关于」页的手动检查都走这里，
+ * 同一时刻只会有一次 plugin:updater|check 在飞。
+ */
+let updateProbeInFlight = null
+function probeUpdate() {
+	if (updateProbeInFlight) return updateProbeInFlight
+	updateProbeInFlight = invoke('plugin:updater|check').finally(() => {
+		updateProbeInFlight = null
+	})
+	return updateProbeInFlight
+}
+
+/**
+ * 单次检查。区别只在 autoDownload：手动检查不自动下载、不排弹窗。
  */
 async function runUpdateCheck({ autoDownload } = { autoDownload: true }) {
-	const update = await invoke('plugin:updater|check')
+	const update = await probeUpdate()
 	if (!update) {
 		console.log('No update available')
 		return null
@@ -1466,6 +1484,12 @@ async function runUpdateCheck({ autoDownload } = { autoDownload: true }) {
 
 	if (update.version === availableUpdate.value?.version) {
 		console.log('Update is already known')
+		// 本次检查新建的句柄没被采用，立刻关掉，否则 5 分钟一轮会持续累积。
+		// 注意不能走 releaseUpdateResource：它在下载中会提前返回，
+		// 而这里要关的本来就不是正在使用的句柄。
+		if (update.rid !== availableUpdate.value?.rid) {
+			await closeUpdateResource(update.rid)
+		}
 		if (autoDownload) scheduleDelayedUpdatePopup()
 		return availableUpdate.value
 	}
@@ -1498,9 +1522,18 @@ async function runUpdateCheck({ autoDownload } = { autoDownload: true }) {
 
 async function checkUpdates() {
 	try {
-		if (!(await areUpdatesEnabled())) {
+		// 探测本身失败也要标记为「已探测」，否则按钮会永久停在「检测中」
+		let updatesAvailable = false
+		try {
+			updatesAvailable = await areUpdatesEnabled()
+		} catch (error) {
+			console.error('Failed to detect update capability:', error)
+		}
+		appUpdateState.updatesCapabilityResolved.value = true
+		updatesEnabled.value = updatesAvailable
+
+		if (!updatesAvailable) {
 			console.log('Skipping update check as updates are disabled in this build or environment')
-			updatesEnabled.value = false
 
 			if (os.value === 'Linux' && !isDevEnvironment.value) {
 				checkLinuxUpdates()
@@ -1509,7 +1542,6 @@ async function checkUpdates() {
 			return
 		}
 
-		updatesEnabled.value = true
 		await runUpdateCheck({ autoDownload: true })
 	} catch (error) {
 		// 关键：检查失败也必须继续轮询，否则一次网络抖动会让更新检查永久失效

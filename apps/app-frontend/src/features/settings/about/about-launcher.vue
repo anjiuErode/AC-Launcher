@@ -41,6 +41,10 @@ const messages = defineMessages({
 		id: 'app.settings.about.update-found',
 		defaultMessage: 'Version {version} is available.',
 	},
+	detecting: {
+		id: 'app.settings.about.detecting',
+		defaultMessage: 'Detecting the update channel…',
+	},
 	updateDisabled: {
 		id: 'app.settings.about.update-disabled',
 		defaultMessage: 'This build has no update channel configured.',
@@ -104,6 +108,7 @@ const version = ref('')
 
 // 全部来自共享更新状态：与主界面自动检查是同一个任务，不会重复下载
 const updatesEnabled = computed(() => appUpdateState.updatesEnabled.value)
+const capabilityResolved = computed(() => appUpdateState.updatesCapabilityResolved.value)
 const checking = computed(() => appUpdateState.checking.value)
 const downloading = computed(() => appUpdateState.downloading.value)
 const downloaded = computed(() => appUpdateState.finishedDownloading.value)
@@ -125,6 +130,9 @@ function setResult(message: string, isError = false) {
 }
 
 async function checkNow() {
+	// 还没探测完就别让点：此时 updatesEnabled 仍是初值 false，
+	// 直接提示「未接入更新通道」会误导
+	if (!capabilityResolved.value) return
 	if (!updatesEnabled.value) {
 		setResult(formatMessage(messages.updateDisabled), true)
 		return
@@ -177,13 +185,16 @@ async function installNow() {
 				<span class="rounded-lg bg-bg-raised px-3 py-1.5 font-mono text-sm text-contrast">
 					v{{ version || '—' }}
 				</span>
-				<Button :disabled="checking || downloading" @click="checkNow">
+				<Button :disabled="!capabilityResolved || checking || downloading" @click="checkNow">
 					{{ checking ? formatMessage(messages.checking) : formatMessage(messages.checkUpdate) }}
 				</Button>
 			</div>
 
+			<p v-if="!capabilityResolved" class="m-0 text-sm text-secondary">
+				{{ formatMessage(messages.detecting) }}
+			</p>
 			<p
-				v-if="manualResult"
+				v-else-if="manualResult"
 				class="m-0 text-sm"
 				:class="manualResultIsError ? 'text-red' : 'text-secondary'"
 			>

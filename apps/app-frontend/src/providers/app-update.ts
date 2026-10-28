@@ -38,6 +38,8 @@ const updateSize = ref<number | null>(null)
 // 未完成能力探测前一律视为不可用，避免按钮提前可点
 const updatesEnabled = ref(false)
 const checking = ref(false)
+/** 能力探测是否已完成；未完成时按钮应保持禁用并提示「检测中」 */
+const updatesCapabilityResolved = ref(false)
 /** 最近一次检查的失败原因，供界面展示；null 表示无错误 */
 const checkError = ref<string | null>(null)
 
@@ -57,6 +59,7 @@ export const appUpdateState = {
 	updateSize,
 	updatesEnabled,
 	checking,
+	updatesCapabilityResolved,
 	checkError,
 	downloadProgress: computed(() => progress.value),
 	downloadPercent: computed(() => Math.trunc(progress.value * 100)),

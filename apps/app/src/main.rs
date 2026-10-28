@@ -65,8 +65,9 @@ fn show_window(app: tauri::AppHandle) {
             .show()
             .unwrap();
         panic!("cannot display application window")
-    } else {
-        let _ = win.set_focus();
+    } else if let Err(error) = win.set_focus() {
+        // 窗口已显示但抢不到焦点（例如被前台全屏程序压住），不该静默吞掉
+        tracing::warn!("Failed to focus the main window after showing it: {error}");
     }
 }
 
