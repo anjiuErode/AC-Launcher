@@ -348,14 +348,29 @@ async fn guild_inspect_pack(path: String) -> Result<guild::PackInspection, guild
     guild::inspect_pack(&path).await
 }
 
-/// 把整合包内容解压进指定实例目录（P4-2）
+/// 把整合包流式解压到暂存目录（P4-2）。先落 staging，成功后才提交进实例，
+/// 避免包损坏或中途失败时留下半成品实例。
 #[tauri::command]
 async fn guild_extract_pack(
     path: String,
-    instance_id: String,
     root_prefix: String,
+) -> Result<guild::PackStaging, guild::GuildApiError> {
+    guild::extract_pack_to_staging(&path, &root_prefix).await
+}
+
+/// 把暂存内容提交进实例目录（P4-2）
+#[tauri::command]
+async fn guild_commit_pack(
+    staging_dir: String,
+    instance_id: String,
 ) -> Result<usize, guild::GuildApiError> {
-    guild::extract_pack_into_instance(&path, &instance_id, &root_prefix).await
+    guild::commit_staging_to_instance(&staging_dir, &instance_id).await
+}
+
+/// 放弃暂存目录（P4-2）
+#[tauri::command]
+async fn guild_discard_pack(staging_dir: String) -> Result<(), guild::GuildApiError> {
+    guild::discard_staging(&staging_dir).await
 }
 
 /// 立即上报一次（切换隐身、刚进游戏时用）
@@ -760,6 +775,8 @@ fn main() {
             guild_download_pack,
             guild_inspect_pack,
             guild_extract_pack,
+            guild_commit_pack,
+            guild_discard_pack,
         ]);
 
     tracing::info!("Initializing app...");

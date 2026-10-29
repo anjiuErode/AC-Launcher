@@ -707,6 +707,9 @@
 	"app.guild.pack.reject-body": {
 		"message": "无法识别当前的导入操作。该压缩包内没有整合包清单（modrinth.index.json、manifest.json）或实例版本文件。"
 	},
+	"app.guild.pack.reject-curseforge": {
+		"message": "这是 CurseForge 导出的整合包，包里只有模组编号、没有模组文件，安装需要 CurseForge API（本项目未接入）。请改用 .mrpack 或完整实例归档。"
+	},
 	"app.guild.pack.reject-title": {
 		"message": "无法导入"
 	},
@@ -2068,6 +2071,9 @@
 	},
 	"app.settings.about.credits-title": {
 		"message": "鸣谢"
+	},
+	"app.settings.about.detect-timeout": {
+		"message": "更新通道检测超时，请重启启动器后重试。"
 	},
 	"app.settings.about.detecting": {
 		"message": "正在检测更新通道…"

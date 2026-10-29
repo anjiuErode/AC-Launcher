@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button, defineMessages, ProgressBar, useVIntl } from '@modrinth/ui'
 import { getVersion } from '@tauri-apps/api/app'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
 	appUpdateState,
@@ -40,6 +40,10 @@ const messages = defineMessages({
 	updateFound: {
 		id: 'app.settings.about.update-found',
 		defaultMessage: 'Version {version} is available.',
+	},
+	detectTimeout: {
+		id: 'app.settings.about.detect-timeout',
+		defaultMessage: 'Update channel detection timed out. Restart ACL and try again.',
 	},
 	detecting: {
 		id: 'app.settings.about.detecting',
@@ -109,6 +113,9 @@ const version = ref('')
 // 全部来自共享更新状态：与主界面自动检查是同一个任务，不会重复下载
 const updatesEnabled = computed(() => appUpdateState.updatesEnabled.value)
 const capabilityResolved = computed(() => appUpdateState.updatesCapabilityResolved.value)
+// 本地 IPC 正常应在毫秒级返回；超过 5 秒视为探测异常，避免永远停在"检测中"
+const capabilityTimedOut = ref(false)
+let capabilityTimer: ReturnType<typeof setTimeout> | null = null
 const checking = computed(() => appUpdateState.checking.value)
 const downloading = computed(() => appUpdateState.downloading.value)
 const downloaded = computed(() => appUpdateState.finishedDownloading.value)
@@ -122,6 +129,21 @@ const manualResultIsError = ref(false)
 
 onMounted(async () => {
 	version.value = await getVersion().catch(() => '')
+	capabilityTimer = setTimeout(() => {
+		if (!capabilityResolved.value) capabilityTimedOut.value = true
+	}, 5000)
+})
+
+onBeforeUnmount(() => {
+	if (capabilityTimer) clearTimeout(capabilityTimer)
+})
+
+// 探测到时提前清掉计时器，避免超时提示在已就绪后闪一下
+watch(capabilityResolved, (resolved) => {
+	if (resolved && capabilityTimer) {
+		clearTimeout(capabilityTimer)
+		capabilityTimer = null
+	}
 })
 
 function setResult(message: string, isError = false) {
@@ -191,7 +213,11 @@ async function installNow() {
 			</div>
 
 			<p v-if="!capabilityResolved" class="m-0 text-sm text-secondary">
-				{{ formatMessage(messages.detecting) }}
+				{{
+					capabilityTimedOut
+						? formatMessage(messages.detectTimeout)
+						: formatMessage(messages.detecting)
+				}}
 			</p>
 			<p
 				v-else-if="manualResult"
