@@ -1,11 +1,11 @@
 {
-	"version": "1.0.0-pre",
-	"notes": "公会服一键加入、整合包一键安装（mrpack / CurseForge / 实例归档 zip）、本地导入；警告收进标题栏；修复面包屑残留。",
-	"pub_date": "2026-10-28T18:38:02Z",
+	"version": "1.0.1-pre",
+	"notes": "整合包导入安全修复：流式解压与配额、先暂存后提交、CurseForge 包改为明确拒绝；更新源改为 Releases 优先。",
+	"pub_date": "2026-10-29T16:38:00Z",
 	"platforms": {
 		"windows-x86_64": {
-			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcmpKc202WE5aR3BZdTUwMjNQdGphblVmZitDVDlMVHpkU21STnR2dFFlcCtSNm5pdUZCc0ZCT3ArWnB2NDdKSXRDYi95OHZodE9oMnh4YWhvUjZMOVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjEyMDYxCWZpbGU6QUNMXzEuMC4wLXByZV94NjQtc2V0dXAuZXhlCkJSY1FUajlHQzlHaldwenRIZkFOQ2h4dS9adFlJbmVqbWpUb0JSMjRqTmkxbkxXTWhQcXliYVN1VXdEZFhUYUU2bzBKbkRGZGZMSks4N05YRjI2ZkNBPT0K",
-			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_1.0.0-pre_x64-setup.exe"
+			"signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQldZN2JZQTVkcmtLOTlIR2hOTzArVTVGaTRXOHliQlFPYWJ5b1BIbDZKcnc0bDN4V0N2bG9PbHJUWFdiYmRZNWJ5MUhiNkF2SXdiTEFYcVBEOGF6RFFBQm9lRUJ1cndFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjg5MjY0CWZpbGU6QUNMXzEuMC4xLXByZV94NjQtc2V0dXAuZXhlClY4T3IyMDhmMkM2bXZ0R3p3VGhmQlFZM2cyNk1TTk5nV1Q5R3Z5MUwwU1ZKUTlUekZZMTNVQlVoN1ZzVXRpYTN5bXZPYjllc3dwWmF1cnhOeVcxR0RBPT0K",
+			"url": "https://github.com/anjiuErode/AC-Launcher/releases/download/updater/ACL_1.0.1-pre_x64-setup.exe"
 		}
 	}
 }
