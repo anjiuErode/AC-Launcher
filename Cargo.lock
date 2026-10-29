@@ -14082,6 +14082,7 @@ dependencies = [
  "urlencoding",
  "uuid 1.23.3",
  "windows",
+ "zip 6.0.0",
 ]
 
 [[package]]

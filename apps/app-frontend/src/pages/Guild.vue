@@ -266,6 +266,11 @@ const messages = defineMessages({
 		id: 'app.guild.pack.reject-title',
 		defaultMessage: 'Cannot import this pack',
 	},
+	rejectCurseforge: {
+		id: 'app.guild.pack.reject-curseforge',
+		defaultMessage:
+			'This is a CurseForge export, which only lists mod IDs. Installing it requires the CurseForge API, which ACL does not use. Please use a .mrpack or a full instance archive instead.',
+	},
 	rejectBody: {
 		id: 'app.guild.pack.reject-body',
 		defaultMessage:
@@ -604,10 +609,12 @@ async function installPack(pack: GuildPack): Promise<void> {
 	}
 }
 
-/** 无法识别时的拒绝弹窗（对齐 PCL2：直接拒绝并说明，不让用户去猜版本） */
+/** 无法安装时的拒绝弹窗（对齐 PCL2：直接拒绝并说明，不让用户去猜版本） */
 const packRejectModal = ref()
+const rejectReason = ref<'unknown' | 'curseforge'>('unknown')
 
-function rejectPack(): void {
+function rejectPack(reason: 'unknown' | 'curseforge' = 'unknown'): void {
+	rejectReason.value = reason
 	packRejectModal.value?.show()
 }
 
@@ -627,7 +634,6 @@ async function runPackInstall(path: string, name: string, format = ''): Promise<
 		return
 	}
 
-	// CurseForge 清单 / 实例归档：先探测版本与加载器，探不到就拒绝，绝不建半成品实例
 	const inspection = await invoke<{
 		format: string
 		mc_version: string | null
@@ -636,33 +642,51 @@ async function runPackInstall(path: string, name: string, format = ''): Promise<
 		root_prefix: string
 	}>('guild_inspect_pack', { path })
 
-	if (!inspection.mc_version || inspection.format === 'unknown') {
-		rejectPack()
+	// CurseForge 导出包只给模组 ID，模组要走 CurseForge API 下载；
+	// 本项目未接入该 API，明确拒绝而不是"解压了 overrides 就当装好"。
+	if (inspection.format === 'curseforge') {
+		rejectPack('curseforge')
 		return
 	}
 
-	const job = await install_create_instance({
-		name,
-		gameVersion: inspection.mc_version,
-		loader: (inspection.loader as InstanceLoader) ?? 'vanilla',
-		loaderVersion: inspection.loader_version,
-		iconPath: null,
-		iconConfig: null,
-		link: null,
-	})
-	const finished = await wait_for_install_job(appEvents, job.job_id)
-	if (!finished.instance_id) throw new Error('instance id missing after creation')
+	if (!inspection.mc_version || inspection.format === 'unknown') {
+		rejectPack('unknown')
+		return
+	}
 
-	const count = await invoke<number>('guild_extract_pack', {
+	// 先解压到暂存目录：磁盘/配额/损坏任何一步失败都不会创建实例
+	const staging = await invoke<{ staging_dir: string; file_count: number }>('guild_extract_pack', {
 		path,
-		instanceId: finished.instance_id,
 		rootPrefix: inspection.root_prefix,
 	})
-	addNotification({
-		type: 'success',
-		title: name,
-		text: `${formatMessage(messages.installDone)}\n${formatMessage(messages.installExtracted, { count })}`,
-	})
+
+	try {
+		const job = await install_create_instance({
+			name,
+			gameVersion: inspection.mc_version,
+			loader: (inspection.loader as InstanceLoader) ?? 'vanilla',
+			loaderVersion: inspection.loader_version,
+			iconPath: null,
+			iconConfig: null,
+			link: null,
+		})
+		const finished = await wait_for_install_job(appEvents, job.job_id)
+		if (!finished.instance_id) throw new Error('instance id missing after creation')
+
+		const count = await invoke<number>('guild_commit_pack', {
+			stagingDir: staging.staging_dir,
+			instanceId: finished.instance_id,
+		})
+		addNotification({
+			type: 'success',
+			title: name,
+			text: `${formatMessage(messages.installDone)}\n${formatMessage(messages.installExtracted, { count })}`,
+		})
+	} catch (error) {
+		// 失败时清掉暂存，不留垃圾
+		await invoke('guild_discard_pack', { stagingDir: staging.staging_dir }).catch(() => {})
+		throw error
+	}
 }
 
 /** 主动导入本地整合包（.mrpack / .zip） */
@@ -1124,7 +1148,13 @@ async function openPack(pack: GuildPack): Promise<void> {
 
 		<ModalWrapper ref="packRejectModal" :header="formatMessage(messages.rejectTitle)">
 			<div class="flex max-w-[420px] flex-col gap-4">
-				<p class="m-0 text-sm text-secondary">{{ formatMessage(messages.rejectBody) }}</p>
+				<p class="m-0 text-sm text-secondary">
+					{{
+						rejectReason === 'curseforge'
+							? formatMessage(messages.rejectCurseforge)
+							: formatMessage(messages.rejectBody)
+					}}
+				</p>
 				<div class="flex justify-end">
 					<Button @click="packRejectModal?.hide()">
 						{{ formatMessage(messages.close) }}

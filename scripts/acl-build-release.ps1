@@ -16,7 +16,9 @@
 
 param(
     [string]$KeyPath,
-    [switch]$SkipFrontend
+    [switch]$SkipFrontend,
+    # 明确承认"这不是可发布的正式产物"才允许覆盖 LTO
+    [switch]$AllowNonFinalProfile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,8 +51,11 @@ if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
 # handle it, and say so out loud - such a build is NOT equivalent to a CI release.
 if (-not $env:CARGO_PROFILE_RELEASE_LTO) {
     Write-Host '[acl] using the repository release profile (fat LTO)' -ForegroundColor Cyan
+} elseif (-not $AllowNonFinalProfile) {
+    # 默认硬失败：避免把 LTO=off 的本地产物当成正式包发出去
+    throw "CARGO_PROFILE_RELEASE_LTO=$env:CARGO_PROFILE_RELEASE_LTO is set. Refusing to build a release package with a non-final profile. Re-run with -AllowNonFinalProfile if this build must not be published."
 } else {
-    Write-Host "[acl] WARNING: profile overridden via CARGO_PROFILE_RELEASE_LTO=$env:CARGO_PROFILE_RELEASE_LTO" -ForegroundColor Yellow
+    Write-Host "[acl] WARNING: non-final profile (LTO=$env:CARGO_PROFILE_RELEASE_LTO) - this artifact must NOT be published" -ForegroundColor Red
 }
 
 $configArgs = @('--config', $releaseConfig)

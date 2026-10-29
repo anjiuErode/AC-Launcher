@@ -645,150 +645,67 @@ pub async fn fetch_presence_list(identifier: &str) -> Result<Vec<GuildPresence>,
 }
 
 // ---------------------------------------------------------------------------
-// 公会整合包：下载与校验（P4-2）
+// 公会整合包：下载 / 识别 / 解压（P4-2）
 //
-// 下载放 Rust 侧的理由：需要落盘、需要算 SHA256、需要嗅探包格式，
-// 而且界面层不该直接拿外部 URL 去 fetch（CSP 与跨域都不方便）。
+// 几条硬性约束（来自代码审查）：
+//   1. 下载与解压都必须有配额，避免 zip bomb 与磁盘打满
+//   2. 解压一律先落 staging，成功后才提交到实例目录，避免留下半成品实例
+//   3. 识别失败不猜版本，交由上层拒绝
 // ---------------------------------------------------------------------------
 
-/// 下载并校验后的整合包
+/// 单个整合包下载上限：4 GiB（远大于任何现实整合包）
+const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// 条目数上限：正常整合包数千级，5 万足够且能挡住条目炸弹
+const MAX_ENTRIES: usize = 50_000;
+/// 单条目解压上限：1 GiB
+const MAX_ENTRY_BYTES: u64 = 1024 * 1024 * 1024;
+/// 累计解压上限：12 GiB
+const MAX_TOTAL_BYTES: u64 = 12 * 1024 * 1024 * 1024;
+/// 压缩比上限：超过视为 zip bomb
+const MAX_COMPRESSION_RATIO: u64 = 200;
+
 #[derive(Debug, Serialize)]
 pub struct GuildPackFile {
 	pub path: String,
-	/// `mrpack`（含 modrinth.index.json）或 `zip`（实例压缩包）
+	/// `mrpack` / `curseforge` / `instance` / `unknown`
 	pub format: String,
 	pub size_bytes: u64,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct PackInspection {
+	pub format: String,
+	pub mc_version: Option<String>,
+	pub loader: Option<String>,
+	pub loader_version: Option<String>,
+	/// 包内实例根前缀，空串表示根目录即实例根，常见为 ".minecraft/"
+	pub root_prefix: String,
+	pub entry_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PackStaging {
+	pub staging_dir: String,
+	pub file_count: usize,
 }
 
 fn sanitize_filename(name: &str) -> String {
 	let cleaned: String = name
 		.chars()
-		.map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' })
+		.map(|c| {
+			if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+				c
+			} else {
+				'_'
+			}
+		})
 		.collect();
-	// 去掉可能的前导点，避免生成隐藏文件或 `..` 之类
 	let trimmed = cleaned.trim_start_matches('.').to_string();
 	if trimmed.is_empty() {
 		"pack.zip".to_string()
 	} else {
 		trimmed
 	}
-}
-
-async fn detect_pack_format(path: &std::path::Path) -> String {
-	match async_zip::tokio::read::fs::ZipFileReader::new(path).await {
-		Ok(zip) => {
-			let has_index = zip.file().entries().iter().any(|entry| {
-				entry
-					.filename()
-					.as_str()
-					.is_ok_and(|name| name == "modrinth.index.json")
-			});
-			if has_index { "mrpack".to_string() } else { "zip".to_string() }
-		}
-		// 打不开就按普通压缩包处理，让安装阶段给出更具体的错误
-		Err(_) => "zip".to_string(),
-	}
-}
-
-/// 下载整合包到临时目录并按 SHA256 校验。
-///
-/// `sha256` 为空表示服务端未提供校验值（契约允许），此时跳过校验但会在日志里留痕。
-pub async fn download_pack(
-	url: &str,
-	sha256: &str,
-	filename: &str,
-) -> Result<GuildPackFile, GuildApiError> {
-	use sha2::{Digest, Sha256};
-
-	if !url.starts_with("https://") {
-		return Err(api_error("bad_request", "整合包地址必须是 https 链接"));
-	}
-
-	let dir = std::env::temp_dir().join("acl-guild-packs");
-	tokio::fs::create_dir_all(&dir)
-		.await
-		.map_err(|err| api_error("io", format!("无法创建临时目录：{err}")))?;
-	let path = dir.join(sanitize_filename(filename));
-
-	let response = theseus::REQWEST_CLIENT
-		.get(url)
-		.timeout(std::time::Duration::from_secs(900))
-		.send()
-		.await
-		.map_err(|err| api_error("network", format!("无法下载整合包：{err}")))?;
-
-	if !response.status().is_success() {
-		return Err(api_error(
-			"server",
-			format!("整合包下载失败：官网返回 {}", response.status()),
-		));
-	}
-
-	let mut file = tokio::fs::File::create(&path)
-		.await
-		.map_err(|err| api_error("io", format!("无法写入临时文件：{err}")))?;
-	let mut hasher = Sha256::new();
-	let mut size: u64 = 0;
-	let mut response = response;
-
-	loop {
-		let chunk = response
-			.chunk()
-			.await
-			.map_err(|err| api_error("network", format!("下载中断：{err}")))?;
-		let Some(chunk) = chunk else { break };
-		hasher.update(&chunk);
-		size += chunk.len() as u64;
-		file.write_all(&chunk)
-			.await
-			.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
-	}
-	file.flush()
-		.await
-		.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
-	drop(file);
-
-	if !sha256.is_empty() {
-		let actual = format!("{:X}", hasher.finalize());
-		if !actual.eq_ignore_ascii_case(sha256.trim()) {
-			let _ = tokio::fs::remove_file(&path).await;
-			return Err(api_error(
-				"checksum",
-				format!("整合包校验失败（期望 {sha256}，实际 {actual}），已丢弃下载文件"),
-			));
-		}
-	} else {
-		tracing::warn!("Guild pack {filename} has no sha256; signature not verified");
-	}
-
-	let format = detect_pack_format(&path).await;
-	Ok(GuildPackFile {
-		path: path.to_string_lossy().to_string(),
-		format,
-		size_bytes: size,
-	})
-}
-
-// ---------------------------------------------------------------------------
-// 公会整合包：格式识别与解压入库（P4-2 的 zip 分支）
-//
-// 识别顺序参照 PCL2 的做法：能确定就确定，确定不了交给上层让用户选，
-// 绝不猜版本 —— 猜错会导致实例根本起不来。
-//   1. modrinth.index.json      → mrpack（交给既有安装流程）
-//   2. manifest.json            → CurseForge 导出包，含 minecraft.version 与 modLoaders
-//   3. versions/<id>/<id>.json  → 实例归档，id / inheritsFrom / libraries 可推版本与加载器
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize, Default)]
-pub struct PackInspection {
-	/// mrpack | curseforge | instance | unknown
-	pub format: String,
-	pub mc_version: Option<String>,
-	pub loader: Option<String>,
-	pub loader_version: Option<String>,
-	/// 包内实例根的前缀，空串表示根目录即实例根，常见为 ".minecraft/"
-	pub root_prefix: String,
-	pub entry_count: usize,
 }
 
 fn normalize_loader(raw: &str) -> Option<(&'static str, String)> {
@@ -805,14 +722,163 @@ fn detect_loader_from_libraries(value: &serde_json::Value) -> Option<(&'static s
 	let libraries = value.get("libraries")?.as_array()?;
 	for library in libraries {
 		let name = library.get("name")?.as_str()?;
-		if let Some((loader, version)) = normalize_loader(name) {
-			return Some((loader, version));
+		if let Some(found) = normalize_loader(name) {
+			return Some(found);
 		}
 	}
 	None
 }
 
-/// 读取 zip 内某个小文件（用于解析清单），超过 8 MB 直接放弃
+/// 下载整合包：写入 `.part`，校验通过后原子改名；任何失败路径都清理临时文件。
+pub async fn download_pack(
+	url: &str,
+	sha256: &str,
+	filename: &str,
+) -> Result<GuildPackFile, GuildApiError> {
+	use sha2::{Digest, Sha256};
+
+	if !url.starts_with("https://") {
+		return Err(api_error("bad_request", "整合包地址必须是 https 链接"));
+	}
+
+	let dir = std::env::temp_dir().join("acl-guild-packs");
+	tokio::fs::create_dir_all(&dir)
+		.await
+		.map_err(|err| api_error("io", format!("无法创建临时目录：{err}")))?;
+	let final_path = dir.join(sanitize_filename(filename));
+	let part_path = dir.join(format!("{}.part", sanitize_filename(filename)));
+
+	let response = theseus::REQWEST_CLIENT
+		.get(url)
+		.timeout(std::time::Duration::from_secs(900))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法下载整合包：{err}")))?;
+
+	if !response.status().is_success() {
+		return Err(api_error(
+			"server",
+			format!("整合包下载失败：官网返回 {}", response.status()),
+		));
+	}
+	if let Some(len) = response.content_length()
+		&& len > MAX_DOWNLOAD_BYTES
+	{
+		return Err(api_error(
+			"too_large",
+			format!("整合包体积超出上限（{len} 字节）"),
+		));
+	}
+
+	let mut file = tokio::fs::File::create(&part_path)
+		.await
+		.map_err(|err| api_error("io", format!("无法写入临时文件：{err}")))?;
+	let mut hasher = Sha256::new();
+	let mut size: u64 = 0;
+	let mut response = response;
+
+	let download_result: Result<(), GuildApiError> = async {
+		loop {
+			let chunk = response
+				.chunk()
+				.await
+				.map_err(|err| api_error("network", format!("下载中断：{err}")))?;
+			let Some(chunk) = chunk else { break };
+			size += chunk.len() as u64;
+			if size > MAX_DOWNLOAD_BYTES {
+				return Err(api_error("too_large", "整合包体积超出上限"));
+			}
+			hasher.update(&chunk);
+			file.write_all(&chunk)
+				.await
+				.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
+		}
+		file.flush()
+			.await
+			.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
+		Ok(())
+	}
+	.await;
+	drop(file);
+
+	if let Err(err) = download_result {
+		let _ = tokio::fs::remove_file(&part_path).await;
+		return Err(err);
+	}
+
+	if !sha256.is_empty() {
+		let actual = format!("{:X}", hasher.finalize());
+		if !actual.eq_ignore_ascii_case(sha256.trim()) {
+			let _ = tokio::fs::remove_file(&part_path).await;
+			return Err(api_error(
+				"checksum",
+				format!("整合包校验失败（期望 {sha256}，实际 {actual}），已丢弃下载文件"),
+			));
+		}
+	} else {
+		tracing::warn!("Guild pack {filename} has no sha256; integrity not verified");
+	}
+
+	if tokio::fs::try_exists(&final_path).await.unwrap_or(false) {
+		let _ = tokio::fs::remove_file(&final_path).await;
+	}
+	tokio::fs::rename(&part_path, &final_path)
+		.await
+		.map_err(|err| api_error("io", format!("无法保存整合包：{err}")))?;
+
+	let format = detect_pack_format(&final_path).await;
+	Ok(GuildPackFile {
+		path: final_path.to_string_lossy().to_string(),
+		format,
+		size_bytes: size,
+	})
+}
+
+/// 只用于下载完成后的快速格式判定（详细探测交给 inspect_pack）
+async fn detect_pack_format(path: &std::path::Path) -> String {
+	match async_zip::tokio::read::fs::ZipFileReader::new(path).await {
+		Ok(zip) => {
+			let has_index = zip.file().entries().iter().any(|entry| {
+				entry
+					.filename()
+					.as_str()
+					.is_ok_and(|name| name == "modrinth.index.json")
+			});
+			if has_index {
+				return "mrpack".to_string();
+			}
+			let has_manifest = zip.file().entries().iter().any(|entry| {
+				entry
+					.filename()
+					.as_str()
+					.is_ok_and(|name| name == "manifest.json")
+			});
+			if has_manifest { "curseforge".to_string() } else { "zip".to_string() }
+		}
+		Err(_) => "zip".to_string(),
+	}
+}
+
+/// 计算包内实例根前缀：支持 `.minecraft/` 与 `<任意单层目录>/.minecraft/`
+fn detect_root_prefix(names: &[String]) -> String {
+	let mut best: Option<String> = None;
+	for name in names {
+		if let Some(idx) = name.find(".minecraft/") {
+			let candidate = name[..idx + ".minecraft/".len()].to_string();
+			// 只接受「单层目录 + .minecraft/」或直接是「.minecraft/」
+			let depth = candidate.matches('/').count();
+			if depth == 1 {
+				best = Some(candidate);
+				break;
+			}
+			if best.as_ref().map(|b| candidate.len() < b.len()).unwrap_or(true) {
+				best = Some(candidate);
+			}
+		}
+	}
+	best.unwrap_or_default()
+}
+
 async fn read_zip_entry(
 	zip: &async_zip::tokio::read::fs::ZipFileReader,
 	index: usize,
@@ -830,48 +896,45 @@ async fn read_zip_entry(
 	Some(bytes)
 }
 
-/// 只探测，不落盘
+/// 探测包格式与内嵌版本信息；不落盘。路径先按根前缀规范化再匹配。
 pub async fn inspect_pack(path: &str) -> Result<PackInspection, GuildApiError> {
-	let path_ref = std::path::Path::new(path);
-	let zip = async_zip::tokio::read::fs::ZipFileReader::new(path_ref)
+	let zip = async_zip::tokio::read::fs::ZipFileReader::new(std::path::Path::new(path))
 		.await
 		.map_err(|err| api_error("io", format!("无法读取整合包：{err}")))?;
 
 	let entries = zip.file().entries();
+	let mut names = Vec::with_capacity(entries.len());
+	for entry in entries.iter() {
+		if let Ok(name) = entry.filename().as_str() {
+			names.push(name.to_string());
+		}
+	}
+
+	let root_prefix = detect_root_prefix(&names);
 	let mut inspection = PackInspection {
 		format: "unknown".to_string(),
-		entry_count: entries.len(),
-		root_prefix: String::new(),
+		entry_count: names.len(),
+		root_prefix: root_prefix.clone(),
 		..Default::default()
 	};
-
-	// 是否被包了一层 .minecraft/
-	if entries.iter().any(|entry| {
-		entry
-			.filename()
-			.as_str()
-			.is_ok_and(|name| name.starts_with(".minecraft/"))
-	}) {
-		inspection.root_prefix = ".minecraft/".to_string();
-	}
 
 	let mut modrinth_index = None;
 	let mut curseforge_manifest = None;
 	let mut version_json = None;
 
-	for (index, entry) in entries.iter().enumerate() {
-		let Ok(name) = entry.filename().as_str() else { continue };
-		match name {
+	for (index, name) in names.iter().enumerate() {
+		let normalized = name.strip_prefix(&root_prefix).unwrap_or(name);
+		match normalized {
 			"modrinth.index.json" => modrinth_index = Some(index),
 			"manifest.json" => curseforge_manifest = Some(index),
 			other => {
-				// versions/<id>/<id>.json
 				let parts: Vec<&str> = other.split('/').collect();
-				if parts.len() == 3 && parts[0] == "versions" && parts[2].ends_with(".json") {
-					let id = parts[1];
-					if parts[2] == format!("{id}.json") && version_json.is_none() {
-						version_json = Some(index);
-					}
+				if parts.len() == 3
+					&& parts[0] == "versions"
+					&& parts[2] == format!("{}.json", parts[1])
+					&& version_json.is_none()
+				{
+					version_json = Some(index);
 				}
 			}
 		}
@@ -882,12 +945,14 @@ pub async fn inspect_pack(path: &str) -> Result<PackInspection, GuildApiError> {
 		return Ok(inspection);
 	}
 
-	if let Some(index) = curseforge_manifest
-		&& let Some(bytes) = read_zip_entry(&zip, index).await
-		&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
-	{
+	if let Some(index) = curseforge_manifest {
 		inspection.format = "curseforge".to_string();
-		if let Some(minecraft) = value.get("minecraft") {
+		// CurseForge 导出包只给模组 ID，模组需要走 CurseForge API 下载，
+		// 本项目未接入该 API，因此这里只回报格式，由上层明确拒绝而不是假装安装。
+		if let Some(bytes) = read_zip_entry(&zip, index).await
+			&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+			&& let Some(minecraft) = value.get("minecraft")
+		{
 			inspection.mc_version = minecraft
 				.get("version")
 				.and_then(|v| v.as_str())
@@ -912,7 +977,6 @@ pub async fn inspect_pack(path: &str) -> Result<PackInspection, GuildApiError> {
 		&& let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
 	{
 		inspection.format = "instance".to_string();
-		// inheritsFrom 存在时它才是原版版本号，id 往往带加载器后缀
 		inspection.mc_version = value
 			.get("inheritsFrom")
 			.and_then(|v| v.as_str())
@@ -928,61 +992,163 @@ pub async fn inspect_pack(path: &str) -> Result<PackInspection, GuildApiError> {
 	Ok(inspection)
 }
 
-/// 把整合包内容解压到指定实例目录，返回写入的文件数
-pub async fn extract_pack_into_instance(
+/// 校验并规范化条目相对路径；返回 None 表示应跳过（不安全或越界）
+fn safe_relative(relative: &str) -> Option<std::path::PathBuf> {
+	if relative.is_empty() {
+		return None;
+	}
+	let mut out = std::path::PathBuf::new();
+	for segment in relative.split('/') {
+		if segment.is_empty() || segment == "." || segment == ".." {
+			return None;
+		}
+		if segment.contains(':') || segment.contains('\\') {
+			return None;
+		}
+		out.push(segment);
+	}
+	if out.as_os_str().is_empty() { None } else { Some(out) }
+}
+
+/// 把包内容流式解压到 staging 目录（不进内存、带配额）
+pub async fn extract_pack_to_staging(
 	path: &str,
-	instance_id: &str,
 	root_prefix: &str,
+) -> Result<PackStaging, GuildApiError> {
+	let source = std::path::PathBuf::from(path);
+	let prefix = root_prefix.to_string();
+	let staging = std::env::temp_dir()
+		.join("acl-pack-staging")
+		.join(uuid::Uuid::new_v4().to_string());
+
+	let staging_for_task = staging.clone();
+	let result = tokio::task::spawn_blocking(move || -> Result<usize, String> {
+		std::fs::create_dir_all(&staging_for_task).map_err(|e| format!("无法创建暂存目录：{e}"))?;
+		let file = std::fs::File::open(&source).map_err(|e| format!("无法打开整合包：{e}"))?;
+		let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无法解析 zip：{e}"))?;
+
+		if archive.len() > MAX_ENTRIES {
+			return Err(format!("条目数超过上限（{}）", archive.len()));
+		}
+
+		let mut total: u64 = 0;
+		let mut written = 0usize;
+		for index in 0..archive.len() {
+			let mut entry = archive.by_index(index).map_err(|e| format!("读取条目失败：{e}"))?;
+			if entry.is_dir() {
+				continue;
+			}
+			let raw = entry.name().to_string();
+			let relative = raw.strip_prefix(prefix.as_str()).unwrap_or(&raw);
+			let Some(rel) = safe_relative(relative) else {
+				tracing::warn!("Skipping unsafe path in pack: {raw}");
+				continue;
+			};
+
+			let size = entry.size();
+			if size > MAX_ENTRY_BYTES {
+				return Err(format!("单文件超过上限：{raw}"));
+			}
+			let compressed = entry.compressed_size().max(1);
+			if size / compressed > MAX_COMPRESSION_RATIO {
+				return Err(format!("压缩比异常，疑似 zip bomb：{raw}"));
+			}
+			total = total.saturating_add(size);
+			if total > MAX_TOTAL_BYTES {
+				return Err("累计解压体积超过上限".to_string());
+			}
+
+			let target = staging_for_task.join(&rel);
+			if !target.starts_with(&staging_for_task) {
+				tracing::warn!("Skipping out-of-bound path in pack: {raw}");
+				continue;
+			}
+			if let Some(parent) = target.parent() {
+				std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败：{e}"))?;
+			}
+			let mut out = std::fs::File::create(&target).map_err(|e| format!("写入失败：{e}"))?;
+			std::io::copy(&mut entry, &mut out).map_err(|e| format!("解压失败：{e}"))?;
+			written += 1;
+		}
+		Ok(written)
+	})
+	.await
+	.map_err(|err| api_error("io", format!("解压任务异常：{err}")))?;
+
+	match result {
+		Ok(count) => Ok(PackStaging {
+			staging_dir: staging.to_string_lossy().to_string(),
+			file_count: count,
+		}),
+		Err(message) => {
+			let _ = tokio::fs::remove_dir_all(&staging).await;
+			Err(api_error("io", message))
+		}
+	}
+}
+
+/// 把 staging 内容提交进实例目录；成功后删除 staging
+pub async fn commit_staging_to_instance(
+	staging_dir: &str,
+	instance_id: &str,
 ) -> Result<usize, GuildApiError> {
-	let zip = async_zip::tokio::read::fs::ZipFileReader::new(std::path::Path::new(path))
-		.await
-		.map_err(|err| api_error("io", format!("无法读取整合包：{err}")))?;
+	let staging = std::path::PathBuf::from(staging_dir);
+	if !tokio::fs::try_exists(&staging).await.unwrap_or(false) {
+		return Err(api_error("io", "暂存目录不存在，可能已被清理"));
+	}
 
 	let target_root = theseus::instance::get_full_path(instance_id)
 		.await
 		.map_err(|err| api_error("not_found", format!("实例不存在：{err}")))?;
 
-	let mut written = 0usize;
-	for index in 0..zip.file().entries().len() {
-		let entry = &zip.file().entries()[index];
-		if entry.dir().is_ok_and(|dir| dir) {
-			continue;
-		}
-		let Ok(name) = entry.filename().as_str() else { continue };
-		let Some(relative) = name.strip_prefix(root_prefix) else { continue };
-		if relative.is_empty() {
-			continue;
-		}
-		// 防路径穿越：逐段校验，拒绝 ..、绝对路径与盘符
-		let mut target = target_root.clone();
-		let mut unsafe_path = false;
-		for segment in relative.split('/') {
-			if segment.is_empty() || segment == "." || segment == ".." || segment.contains(':') || segment.contains('\\') {
-				unsafe_path = true;
-				break;
+	let staging_for_task = staging.clone();
+	let result = tokio::task::spawn_blocking(move || -> Result<usize, String> {
+		fn move_dir(from: &std::path::Path, to: &std::path::Path) -> Result<usize, String> {
+			let mut moved = 0usize;
+			std::fs::create_dir_all(to).map_err(|e| format!("创建目录失败：{e}"))?;
+			for entry in std::fs::read_dir(from).map_err(|e| format!("读取暂存失败：{e}"))? {
+				let entry = entry.map_err(|e| format!("读取暂存失败：{e}"))?;
+				let path = entry.path();
+				let dest = to.join(entry.file_name());
+				if path.is_dir() {
+					moved += move_dir(&path, &dest)?;
+				} else {
+					if dest.exists() {
+						let _ = std::fs::remove_file(&dest);
+					}
+					// 同一分区下 rename 最快；跨分区时退化为复制
+					if std::fs::rename(&path, &dest).is_err() {
+						std::fs::copy(&path, &dest).map_err(|e| format!("写入实例失败：{e}"))?;
+					}
+					moved += 1;
+				}
 			}
-			target.push(segment);
+			Ok(moved)
 		}
-		if unsafe_path {
-			tracing::warn!("Skipping unsafe path in pack: {name}");
-			continue;
-		}
+		move_dir(&staging_for_task, &target_root)
+	})
+	.await
+	.map_err(|err| api_error("io", format!("提交任务异常：{err}")))?;
 
-		if let Some(parent) = target.parent() {
-			let _ = tokio::fs::create_dir_all(parent).await;
+	match result {
+		Ok(count) => {
+			let _ = tokio::fs::remove_dir_all(&staging).await;
+			Ok(count)
 		}
-		let mut bytes = Vec::new();
-		zip.reader_with_entry(index)
-			.await
-			.map_err(|err| api_error("io", format!("读取 {name} 失败：{err}")))?
-			.read_to_end_checked(&mut bytes)
-			.await
-			.map_err(|err| api_error("io", format!("解压 {name} 失败：{err}")))?;
-		tokio::fs::write(&target, &bytes)
-			.await
-			.map_err(|err| api_error("io", format!("写入 {name} 失败：{err}")))?;
-		written += 1;
+		Err(message) => Err(api_error("io", message)),
 	}
+}
 
-	Ok(written)
+/// 放弃 staging（安装失败或用户取消时调用）
+pub async fn discard_staging(staging_dir: &str) -> Result<(), GuildApiError> {
+	let path = std::path::PathBuf::from(staging_dir);
+	// 只允许删自己创建的目录，避免被传入任意路径
+	if !path
+		.to_string_lossy()
+		.contains("acl-pack-staging")
+	{
+		return Err(api_error("bad_request", "拒绝清理非暂存目录"));
+	}
+	let _ = tokio::fs::remove_dir_all(&path).await;
+	Ok(())
 }

@@ -615,6 +615,9 @@
 	"app.guild.pack.reject-body": {
 		"message": "Cannot recognise the import operation. The archive contains no modpack manifest (modrinth.index.json, manifest.json) or instance version file."
 	},
+	"app.guild.pack.reject-curseforge": {
+		"message": "This is a CurseForge export, which only lists mod IDs. Installing it requires the CurseForge API, which ACL does not use. Please use a .mrpack or a full instance archive instead."
+	},
 	"app.guild.pack.reject-title": {
 		"message": "Cannot import this pack"
 	},
@@ -1976,6 +1979,9 @@
 	},
 	"app.settings.about.credits-title": {
 		"message": "Credits"
+	},
+	"app.settings.about.detect-timeout": {
+		"message": "Update channel detection timed out. Restart ACL and try again."
 	},
 	"app.settings.about.detecting": {
 		"message": "Detecting the update channel…"
