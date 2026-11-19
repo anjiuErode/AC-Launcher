@@ -1,60 +1,50 @@
-name: 🎮 Bug with Modrinth App
-description: For issues with Modrinth App.
-labels: [app]
-type: 'bug'
+name: ACL 故障反馈
+description: 报告 Windows 版 ACL 启动器的故障。
+labels: [bug]
 body:
   - type: checkboxes
     attributes:
-      label: Please confirm the following.
+      label: 提交前确认
       options:
-        - label: I checked the [existing issues](https://github.com/modrinth/code/issues?q=is%3Aissue) for duplicate problems
-          required: true
-        - label: I have tried resolving the issue using the [support portal](https://support.modrinth.com)
-          required: true
-        - label: I have ensured my Modrinth App installation is up to date
+        - label: 我已搜索[现有议题](https://github.com/anjiuErode/AC-Launcher/issues?q=is%3Aissue)，没有发现重复反馈。
           required: true
   - type: input
     id: version
     attributes:
-      label: What version of the Modrinth App are you using?
-      description: Find this in ⚙️ Settings (bottom right) -> After Modrinth App (bottom left)
+      label: ACL 版本
+      description: 填写启动器显示的完整版本号。
+      placeholder: 1.0.1-pre
     validations:
       required: true
   - type: dropdown
-    id: oses
+    id: windows
     attributes:
-      label: What operating systems are you seeing the problem on?
-      multiple: true
+      label: Windows 系统（x64）
       options:
-        - Windows
-        - MacOS
-        - Linux
-  - type: textarea
-    attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is. Include screenshots if applicable.
+        - Windows 10
+        - Windows 11
     validations:
       required: true
   - type: textarea
+    id: actual
     attributes:
-      label: Steps to reproduce
-      description: Steps to reproduce the behavior.
-      placeholder: |
-        1. Go to '...'
-        2. Click on '...'
-        3. Scroll down to '...'
-        4. See error
+      label: 实际表现
+      description: 描述发生了什么。如有报错，请附上完整的错误文字。
     validations:
-      required: false
+      required: true
   - type: textarea
+    id: reproduction
     attributes:
-      label: Expected behavior
-      description: A clear and concise description of what you expected to happen.
+      label: 复现步骤
+      description: 无法稳定复现时，请描述触发条件或出现频率。
     validations:
-      required: false
+      required: true
   - type: textarea
+    id: expected
     attributes:
-      label: Additional context
-      description: Add any other context about the problem here.
-    validations:
-      required: false
+      label: 预期表现
+  - type: textarea
+    id: context
+    attributes:
+      label: 日志或截图
+      description: 可附上相关日志和截图。提交前请移除凭据与个人信息。

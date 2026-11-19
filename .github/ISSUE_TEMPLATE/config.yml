@@ -1,8 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 🫶 Support portal
-    about: Get support using through our support website.
-    url: https://support.modrinth.com
-  - name: 💬 Chat on Discord
-    about: Join our Discord server to chat about Modrinth.
-    url: https://discord.modrinth.com
+  - name: 查看 ACL 现有议题
+    about: 搜索已反馈的故障和功能建议。
+    url: https://github.com/anjiuErode/AC-Launcher/issues?q=is%3Aissue
