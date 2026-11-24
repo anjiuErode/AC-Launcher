@@ -123,6 +123,10 @@ const messages = defineMessages({
 		id: 'app.settings.about.contributor-ai-role',
 		defaultMessage: 'AI model — launcher rewrite and features',
 	},
+	contributorCodexRole: {
+		id: 'app.settings.about.contributor-codex-role',
+		defaultMessage: 'Hotfix channel and release verification',
+	},
 	maintainerTitle: {
 		id: 'app.settings.about.maintainer-title',
 		defaultMessage: 'Maintainer',
@@ -370,6 +374,10 @@ async function openHotfix() {
 				<li class="text-primary">
 					大肥鱼（AI 模型 · DeepSeek-V4.1-Flash）
 					<span class="text-secondary">— {{ formatMessage(messages.contributorAiRole) }}</span>
+				</li>
+				<li class="text-primary">
+					大肥龙（Codex）
+					<span class="text-secondary">— {{ formatMessage(messages.contributorCodexRole) }}</span>
 				</li>
 			</ul>
 		</div>

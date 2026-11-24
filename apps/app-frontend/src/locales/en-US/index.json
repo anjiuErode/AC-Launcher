@@ -2432,6 +2432,9 @@
 	"app.settings.about.contributor-anjiu-role": {
 		"message": "Founder, product and design"
 	},
+	"app.settings.about.contributor-codex-role": {
+		"message": "Hotfix channel and release verification"
+	},
 	"app.settings.about.contributors-title": {
 		"message": "Contributors"
 	},
