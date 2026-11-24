@@ -16,15 +16,11 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::io::{ErrorKind, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, MutexGuard};
-use std::time::Duration;
-use tauri_plugin_http::reqwest::{self, RequestBuilder, Response, StatusCode};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::time::{Instant, sleep};
 
 /// 官网授权页地址
 const AUTH_PAGE: &str = "https://yingzhou1110.top/acl/auth";
@@ -344,20 +340,8 @@ pub fn sign_out(identifier: &str) -> Result<(), String> {
 
 /// 官网根地址（与授权页同源）
 const API_BASE: &str = "https://yingzhou1110.top";
-/// 公会请求的总等候上限，包含重试和正文读取。
-const API_TIMEOUT: Duration = Duration::from_secs(15);
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const RETRY_DELAY: Duration = Duration::from_millis(250);
-const MIN_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
-
-static GUILD_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-	theseus::client_builder_with(&theseus::http_proxy_config())
-		.https_only(true)
-		.connect_timeout(CONNECT_TIMEOUT)
-		.retry(reqwest::retry::never())
-		.build()
-		.expect("guild client configuration should be valid")
-});
+/// 单次请求上限，避免代理异常时界面无限转圈
+const API_TIMEOUT_SECS: u64 = 15;
 
 /// 前端可判别的错误。`code` 决定界面提示「重新登录」还是「数据暂时不可用」。
 #[derive(Debug, Serialize)]
@@ -371,160 +355,6 @@ fn api_error(code: &'static str, message: impl Into<String>) -> GuildApiError {
 		code,
 		message: message.into(),
 	}
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum NetworkFailure {
-	ConnectTimeout,
-	ResponseTimeout,
-	BodyTimeout,
-	Reset,
-	Disconnected,
-	Refused,
-	ConnectFailed,
-	Other,
-}
-
-impl NetworkFailure {
-	fn classify(error: reqwest::Error, reading_body: bool) -> Self {
-		if error.is_timeout() {
-			return if reading_body {
-				Self::BodyTimeout
-			} else if error.is_connect() {
-				Self::ConnectTimeout
-			} else {
-				Self::ResponseTimeout
-			};
-		}
-
-		let mut failure = if error.is_connect() {
-			Self::ConnectFailed
-		} else {
-			Self::Other
-		};
-		let mut source = error.source();
-		while let Some(cause) = source {
-			if let Some(io_error) = cause.downcast_ref::<std::io::Error>() {
-				match io_error.kind() {
-					ErrorKind::ConnectionReset => return Self::Reset,
-					ErrorKind::ConnectionRefused => return Self::Refused,
-					ErrorKind::ConnectionAborted
-					| ErrorKind::UnexpectedEof
-					| ErrorKind::BrokenPipe => {
-						failure = Self::Disconnected;
-					}
-					_ => {}
-				}
-			}
-			if cause
-				.downcast_ref::<hyper::Error>()
-				.is_some_and(hyper::Error::is_incomplete_message)
-			{
-				failure = Self::Disconnected;
-			}
-			source = cause.source();
-		}
-		failure
-	}
-
-	fn can_retry(&self) -> bool {
-		matches!(
-			self,
-			Self::ConnectTimeout
-				| Self::ResponseTimeout
-				| Self::BodyTimeout
-				| Self::Reset
-				| Self::Disconnected
-		)
-	}
-
-	fn into_api_error(self) -> GuildApiError {
-		let message = match self {
-			Self::ConnectTimeout => "连接官网超时，可能卡在域名解析、代理连接或安全握手。",
-			Self::ResponseTimeout => "等待官网响应超时，请稍后重试。",
-			Self::BodyTimeout => "读取官网响应超时，请稍后重试。",
-			Self::Reset => "与官网的连接被重置，请稍后重试。",
-			Self::Disconnected => "与官网的连接意外中断，请稍后重试。",
-			Self::Refused => "连接官网被拒绝，请检查网络或代理设置。",
-			Self::ConnectFailed => "无法建立与官网的连接，请检查网络或代理设置。",
-			Self::Other => "官网请求失败，请稍后重试。",
-		};
-		api_error("network", message)
-	}
-}
-
-#[derive(Debug)]
-enum GetError {
-	Network(NetworkFailure),
-	Api(GuildApiError),
-}
-
-impl GetError {
-	fn read_body(error: reqwest::Error) -> Self {
-		Self::Network(NetworkFailure::classify(error, true))
-	}
-
-	fn into_api_error(self) -> GuildApiError {
-		match self {
-			Self::Network(error) => error.into_api_error(),
-			Self::Api(error) => error,
-		}
-	}
-}
-
-async fn send_request(
-	request: RequestBuilder,
-	timeout: Duration,
-) -> Result<Response, NetworkFailure> {
-	request
-		.timeout(timeout)
-		.send()
-		.await
-		.map_err(|error| NetworkFailure::classify(error, false))
-}
-
-async fn get_with_retry<T, F>(
-	request: RequestBuilder,
-	budget: Duration,
-	read_response: impl Fn(Response) -> F + Send + Sync,
-) -> Result<T, GuildApiError>
-where
-	F: Future<Output = Result<T, GetError>> + Send,
-{
-	let retry = request.try_clone();
-	let deadline = Instant::now() + budget;
-	let attempt = async |request| {
-		let remaining = deadline.saturating_duration_since(Instant::now());
-		let response = send_request(request, remaining)
-			.await
-			.map_err(GetError::Network)?;
-		read_response(response).await
-	};
-
-	let result = attempt(request).await;
-	if matches!(&result, Err(GetError::Network(error)) if error.can_retry())
-		&& deadline.saturating_duration_since(Instant::now()) >= RETRY_DELAY + MIN_RETRY_TIMEOUT
-		&& let Some(request) = retry
-	{
-		sleep(RETRY_DELAY).await;
-		if deadline.saturating_duration_since(Instant::now()) >= MIN_RETRY_TIMEOUT {
-			return attempt(request).await.map_err(GetError::into_api_error);
-		}
-	}
-	result.map_err(GetError::into_api_error)
-}
-
-fn server_error(status: StatusCode, body: &str) -> GuildApiError {
-	let message = serde_json::from_str::<serde_json::Value>(body)
-		.ok()
-		.and_then(|value| value.get("error")?.as_str().map(str::to_string))
-		.unwrap_or_else(|| format!("官网返回 {status}"));
-	api_error("server", message)
-}
-
-fn expired_session(identifier: &str, token: &str) -> GuildApiError {
-	let _ = clear_expired_session(identifier, token);
-	api_error("unauthorized", "登录已过期，请重新登录")
 }
 
 fn require_session(identifier: &str) -> Result<GuildSession, GuildApiError> {
@@ -604,22 +434,38 @@ async fn get_json<T: DeserializeOwned>(
 	path: &str,
 ) -> Result<T, GuildApiError> {
 	let session = require_session(identifier)?;
-	let token = session.token.as_str();
-	let request = GUILD_CLIENT
+
+	let response = theseus::REQWEST_CLIENT
 		.get(format!("{API_BASE}{path}"))
-		.header("x-studio-token", token);
-	let body = get_with_retry(request, API_TIMEOUT, |response| async move {
-		let status = response.status();
-		if status == StatusCode::UNAUTHORIZED {
-			return Err(GetError::Api(expired_session(identifier, token)));
-		}
-		if !status.is_success() {
-			let body = response.text().await.unwrap_or_default();
-			return Err(GetError::Api(server_error(status, &body)));
-		}
-		response.text().await.map_err(GetError::read_body)
-	})
-	.await?;
+		.header("x-studio-token", &session.token)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法连接官网：{err}")))?;
+
+	let status = response.status();
+	if status.as_u16() == 401 {
+		let _ = clear_expired_session(identifier, &session.token);
+		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
+	}
+
+	let body = response
+		.text()
+		.await
+		.map_err(|err| api_error("network", format!("读取官网响应失败：{err}")))?;
+
+	if !status.is_success() {
+		let message = serde_json::from_str::<serde_json::Value>(&body)
+			.ok()
+			.and_then(|value| {
+				value
+					.get("error")
+					.and_then(|error| error.as_str())
+					.map(str::to_string)
+			})
+			.unwrap_or_else(|| format!("官网返回 {status}"));
+		return Err(api_error("server", message));
+	}
 
 	serde_json::from_str(&body)
 		.map_err(|err| api_error("bad_response", format!("官网数据格式异常：{err}")))
@@ -672,29 +518,32 @@ pub async fn fetch_attachment_text(
 	let url = format!(
 		"{API_BASE}/api/news/{news_id}/attachments/{attachment_id}?inline=1"
 	);
-	get_with_retry(GUILD_CLIENT.get(url), API_TIMEOUT, read_attachment_text).await
-}
 
-async fn read_attachment_text(response: Response) -> Result<String, GetError> {
+	let response = theseus::REQWEST_CLIENT
+		.get(url)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
+		.await
+		.map_err(|err| api_error("network", format!("无法读取附件：{err}")))?;
+
 	let status = response.status();
 	if !status.is_success() {
-		return Err(GetError::Api(api_error(
+		return Err(api_error(
 			"server",
 			format!("官网返回 {status}，附件可能已被删除"),
-		)));
+		));
 	}
 
-	let bytes = response.bytes().await.map_err(GetError::read_body)?;
+	let bytes = response
+		.bytes()
+		.await
+		.map_err(|err| api_error("network", format!("读取附件内容失败：{err}")))?;
 	if bytes.len() > ATTACHMENT_TEXT_LIMIT {
-		return Err(GetError::Api(api_error("too_large", "附件太大，请用浏览器打开")));
+		return Err(api_error("too_large", "附件太大，请用浏览器打开"));
 	}
 	// 文本附件不保证是合法 UTF-8，坏字节按替换字符显示，总比整块失败好
 	Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
-
-#[cfg(test)]
-#[path = "guild/http_tests.rs"]
-mod http_tests;
 
 pub async fn fetch_packs(identifier: &str) -> Result<Vec<GuildPack>, GuildApiError> {
 	let body: Items<GuildPack> = get_json(identifier, "/api/guild/packs").await?;
@@ -803,25 +652,37 @@ async fn post_json(
 	body: &serde_json::Value,
 ) -> Result<(), GuildApiError> {
 	let session = require_session(identifier)?;
-	let request = GUILD_CLIENT
+
+	let response = theseus::REQWEST_CLIENT
 		.post(format!("{API_BASE}{path}"))
 		.header("x-studio-token", &session.token)
-		.json(body);
-	let response = send_request(request, API_TIMEOUT)
+		.json(body)
+		.timeout(std::time::Duration::from_secs(API_TIMEOUT_SECS))
+		.send()
 		.await
-		.map_err(NetworkFailure::into_api_error)?;
+		.map_err(|err| api_error("network", format!("无法连接官网：{err}")))?;
 
 	let status = response.status();
-	if status == StatusCode::UNAUTHORIZED {
-		return Err(expired_session(identifier, &session.token));
+	if status.as_u16() == 401 {
+		let _ = clear_expired_session(identifier, &session.token);
+		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
 	}
 	// 客户端每 30 秒一次，服务端 10 秒内重复会回 429 —— 这是正常节奏，不该当错误
-	if status == StatusCode::TOO_MANY_REQUESTS || status.is_success() {
+	if status.as_u16() == 429 || status.is_success() {
 		return Ok(());
 	}
 
 	let body = response.text().await.unwrap_or_default();
-	Err(server_error(status, &body))
+	let message = serde_json::from_str::<serde_json::Value>(&body)
+		.ok()
+		.and_then(|value| {
+			value
+				.get("error")
+				.and_then(|error| error.as_str())
+				.map(str::to_string)
+		})
+		.unwrap_or_else(|| format!("官网返回 {status}"));
+	Err(api_error("server", message))
 }
 
 /// 上报一次在线状态。返回 false 表示当前没有在玩游戏（未发送）。
