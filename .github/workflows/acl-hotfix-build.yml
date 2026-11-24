@@ -1,0 +1,112 @@
+name: ACL Hotfix Build
+
+on:
+  push:
+    branches: ['codex/hotfix/**']
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acl-hotfix-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  SQLX_OFFLINE: 'true'
+  MODRINTH_URL: https://modrinth.com/
+  MODRINTH_API_BASE_URL: https://api.modrinth.com/
+  MODRINTH_API_URL: https://api.modrinth.com/v2/
+  MODRINTH_API_URL_V3: https://api.modrinth.com/v3/
+  MODRINTH_SOCKET_URL: wss://api.modrinth.com/
+  MODRINTH_LAUNCHER_META_URL: https://launcher-meta.modrinth.com/
+  MODRINTH_ARCHON_BASE_URL: https://archon.modrinth.com/
+  SHARED_INSTANCES_API_BASE_URL: https://shared-instances.modrinth.com/
+
+jobs:
+  windows:
+    name: Hotfix Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+
+      - name: Enable pnpm via corepack
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.11.2 --activate
+          pnpm --version
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+          key: acl-hotfix
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build signed hotfix installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter @modrinth/app run tauri build --config tauri-release.conf.json --config tauri-hotfix.conf.json --bundles nsis
+
+      - name: Collect signed installer and hotfix manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content apps/app/tauri-hotfix.conf.json -Raw | ConvertFrom-Json).version
+          if ($version -cnotmatch '^(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>[1-9][0-9]*)-hotfix\.[1-9][0-9]*$') {
+            throw "Invalid ACL hotfix version: $version"
+          }
+          $baseVersion = '{0}.{1}.{2}' -f $Matches.major, $Matches.minor, ([int]$Matches.patch - 1)
+          $installer = "ACL_${version}_x64-setup.exe"
+          $installerPath = Join-Path 'target/release/bundle/nsis' $installer
+          $signaturePath = "$installerPath.sig"
+          $signature = (Get-Content -LiteralPath $signaturePath -Raw).Trim()
+          if ([Convert]::FromBase64String($signature).Length -eq 0) {
+            throw 'The hotfix signature is empty.'
+          }
+          New-Item -ItemType Directory -Path out/hotfix -Force | Out-Null
+          Copy-Item -LiteralPath $installerPath, $signaturePath -Destination out/hotfix
+          $assetRoot = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/hotfix-v$version"
+          $manifest = [ordered]@{
+            channel = 'hotfix'
+            base_version = $baseVersion
+            version = $version
+            pub_date = [DateTimeOffset]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = [ordered]@{
+              'windows-x86_64' = [ordered]@{
+                url = "$assetRoot/$installer"
+                signature = $signature
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath out/hotfix/latest.json -Encoding utf8NoBOM
+
+      - name: Upload hotfix artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACL-hotfix-windows-x64
+          path: out/hotfix/*
+          if-no-files-found: error
