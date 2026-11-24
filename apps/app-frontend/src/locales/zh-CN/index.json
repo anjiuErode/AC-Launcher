@@ -2524,6 +2524,9 @@
 	"app.settings.about.contributor-anjiu-role": {
 		"message": "项目发起人，产品与设计"
 	},
+	"app.settings.about.contributor-codex-role": {
+		"message": "热补丁通道与发布验证"
+	},
 	"app.settings.about.contributors-title": {
 		"message": "贡献者"
 	},
