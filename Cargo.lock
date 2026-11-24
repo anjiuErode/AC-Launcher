@@ -14061,6 +14061,7 @@ dependencies = [
  "paste",
  "path-util",
  "rand 0.8.5",
+ "semver",
  "serde",
  "serde_json",
  "serde_with",

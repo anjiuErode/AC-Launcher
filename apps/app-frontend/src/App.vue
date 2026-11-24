@@ -139,6 +139,7 @@ import {
 	screenshotKeys,
 } from '@/pages/instance/query-options'
 import { createAppClient } from '@/platform/modrinth-client'
+import { checkAclHotfix } from '@/providers/acl-hotfix'
 import {
 	appUpdateState,
 	downloadAvailableAppUpdate,
@@ -458,6 +459,7 @@ watch(
 
 
 let unlistenEditMenu
+let hotfixCheckInterval
 
 function handleEditMenuAction(action) {
 	const event = new CustomEvent(`edit-menu:${action}`, { cancelable: true })
@@ -465,6 +467,9 @@ function handleEditMenuAction(action) {
 }
 
 onMounted(async () => {
+	void checkAclHotfix()
+	hotfixCheckInterval = setInterval(checkAclHotfix, 5 * 60 * 1000)
+
 	try {
 		const listeners = await Promise.all([
 			listen('edit-menu://undo', () => handleEditMenuAction('undo')),
@@ -484,6 +489,7 @@ onMounted(async () => {
 })
 
 onUnmounted(async () => {
+	clearInterval(hotfixCheckInterval)
 	document.querySelector('body').removeEventListener('click', handleClick)
 	document.querySelector('body').removeEventListener('auxclick', handleAuxClick)
 	document.querySelector('body').removeEventListener('contextmenu', handleContextMenu)

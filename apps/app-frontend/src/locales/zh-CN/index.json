@@ -2509,6 +2509,9 @@
 	"app.settings.about.brand-title": {
 		"message": "品牌归属"
 	},
+	"app.settings.about.check-hotfix": {
+		"message": "检查热补丁"
+	},
 	"app.settings.about.check-update": {
 		"message": "检查最新版本"
 	},
@@ -2545,8 +2548,32 @@
 	"app.settings.about.downloading": {
 		"message": "正在下载…"
 	},
+	"app.settings.about.hotfix-available": {
+		"message": "热补丁 {version} 可用于 {baseVersion}。"
+	},
+	"app.settings.about.hotfix-checking": {
+		"message": "正在检查热补丁…"
+	},
+	"app.settings.about.hotfix-failed": {
+		"message": "无法检查热补丁，请稍后重试。"
+	},
+	"app.settings.about.hotfix-open-failed": {
+		"message": "无法打开热补丁发布页面。"
+	},
+	"app.settings.about.hotfix-title": {
+		"message": "热补丁"
+	},
+	"app.settings.about.hotfix-unavailable": {
+		"message": "当前版本没有可用的热补丁。"
+	},
+	"app.settings.about.hotfix-unsupported": {
+		"message": "此版本不支持热补丁检查。"
+	},
 	"app.settings.about.maintainer-title": {
 		"message": "运维者"
+	},
+	"app.settings.about.open-hotfix": {
+		"message": "查看热补丁"
 	},
 	"app.settings.about.restart-install": {
 		"message": "立即重启安装"
