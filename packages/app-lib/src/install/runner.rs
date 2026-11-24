@@ -4,7 +4,7 @@ use super::model::{
     InstallJobEventKind, InstallJobSnapshot, InstallJobState, InstallJobStatus,
     InstallPhaseDetails, InstallPhaseId, InstallPostInstallEdit,
     InstallProgress, InstallProgressSecondary, InstallRequest,
-    InstallRollbackState, InstallTarget, SharedInstanceInstallData,
+    InstallRollbackState, InstallTarget, InstanceVersionSwitch, SharedInstanceInstallData,
 };
 use super::shared_instance::{
     apply_shared_instance_content, apply_shared_instance_update,
@@ -14,6 +14,7 @@ use super::shared_instance::{
 };
 use super::{diagnostics, recovery, store};
 use crate::ErrorKind;
+use crate::api::pack::import::external::ExternalImportSource;
 use crate::api::pack::install_from::{
     CreatePackLocation, generate_pack_from_file,
     generate_pack_from_version_id_with_reporter, get_instance_from_pack,
@@ -156,6 +157,20 @@ pub async fn import_instance(
     .await
 }
 
+pub async fn import_external_instance(
+    source: ExternalImportSource,
+    title: String,
+) -> crate::Result<InstallJobSnapshot> {
+    let title = title.trim().chars().take(160).collect::<String>();
+    start(InstallRequest::ImportExternalInstance { source, title }).await
+}
+
+pub(crate) fn reserve_external_content_target(
+    instance_id: &str,
+) -> crate::Result<Option<OwnedMutexGuard<()>>> {
+    reserve_target(&InstallTarget::ExistingInstance { instance_id: instance_id.to_owned() })
+}
+
 pub async fn duplicate_instance(
     source_instance_id: String,
 ) -> crate::Result<InstallJobSnapshot> {
@@ -166,7 +181,20 @@ pub async fn install_existing_instance(
     instance_id: String,
     force: bool,
 ) -> crate::Result<InstallJobSnapshot> {
-    start(InstallRequest::InstallExistingInstance { instance_id, force }).await
+    start(InstallRequest::InstallExistingInstance { instance_id, force, version_switch: None }).await
+}
+
+pub(crate) async fn switch_instance_version(
+    instance_id: String,
+    version_switch: InstanceVersionSwitch,
+) -> crate::Result<InstallJobSnapshot> {
+    let state = State::get().await?;
+    let _activity = state.instance_locks.lock_activity(&instance_id).await;
+    start(InstallRequest::InstallExistingInstance {
+        instance_id,
+        force: false,
+        version_switch: Some(version_switch),
+    }).await
 }
 
 pub(crate) async fn wait_for_job(
@@ -713,6 +741,7 @@ async fn prepare_initial_instance_inner(
             );
             set_instance_id(job_state, metadata.instance.id);
         }
+        InstallRequest::ImportExternalInstance { .. } => {}
         InstallRequest::DuplicateInstance { source_instance_id } => {
             let metadata =
                 crate::state::get_instance(&source_instance_id, &state.pool)
@@ -1190,6 +1219,9 @@ async fn run_request_inner(
             .await?;
             Ok(Some(instance_id))
         }
+        InstallRequest::ImportExternalInstance { source, title } => {
+            Box::pin(run_external_import(job_id, job_state, state, source, title)).await.map(Some)
+        }
         InstallRequest::DuplicateInstance { source_instance_id } => {
             let Some(instance_id) = current_instance_id(job_state) else {
                 bail!(ErrorKind::InputError(
@@ -1238,10 +1270,14 @@ async fn run_request_inner(
             emit_instance(&instance_id, InstancePayloadType::Edited).await?;
             Ok(Some(instance_id))
         }
-        InstallRequest::InstallExistingInstance { instance_id, force } => {
+        InstallRequest::InstallExistingInstance { instance_id, force, version_switch } => {
             prepare_existing_rollback(job_state, &state.pool, &instance_id)
                 .await?;
             lock_instance(&instance_id, state).await?;
+            if let Some(version_switch) = version_switch {
+                prepare_update_backup(job_id, job_state, state).await?;
+                apply_version_switch(job_id, &instance_id, version_switch, state).await?;
+            }
             update_progress(
                 job_id,
                 job_state,
@@ -1647,6 +1683,164 @@ async fn install_pack_inner(
     Ok(())
 }
 
+async fn apply_version_switch(
+    job_id: Uuid,
+    instance_id: &str,
+    change: InstanceVersionSwitch,
+    state: &State,
+) -> crate::Result<()> {
+    for path in change.disable_mods {
+        super::control::checkpoint(job_id).await?;
+        if content_rows::is_instance_file_locked(instance_id, &path, &state.pool).await? {
+            bail!(ErrorKind::InputError(format!(
+                "content was locked after the version preview: {path}"
+            )));
+        }
+        crate::state::instances::commands::toggle_disable_project(
+            instance_id,
+            &path,
+            Some(false),
+            state,
+        ).await?;
+    }
+    crate::state::edit_instance(
+        instance_id,
+        crate::state::EditInstance {
+            content_set_patch: Some(crate::state::AppliedContentSetPatch {
+                game_version: Some(change.game_version),
+                loader: Some(change.loader),
+                loader_version: Some(change.loader_version),
+                protocol_version: Some(None),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        state,
+    ).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod version_switch_tests {
+    use super::{apply_version_switch, content_rows, recovery, InstallRollbackState, InstanceVersionSwitch};
+    use crate::state::instances::adapters::sqlite::instance_rows;
+    use crate::state::{
+        ContentSet, ContentSetStatus, ContentSourceKind, Instance, InstanceFile,
+        InstanceInstallStage, InstanceLink, LauncherFeatureVersion, ModLoader,
+        ReleaseChannel, State,
+    };
+    use anyhow::Context;
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn disabled_mod_and_original_version_are_restored_after_switch_failure() -> crate::Result<()> {
+        let sandbox = tempfile::tempdir()?;
+        let state = State::isolated_install_test_state(sandbox.path()).await?;
+        let id = "local:synthetic-version-switch";
+        let content_set_id = "content-set:synthetic";
+        let now = Utc::now();
+        let instance = Instance {
+            id: id.to_owned(),
+            path: "synthetic".to_owned(),
+            applied_content_set_id: Some(content_set_id.to_owned()),
+            install_stage: InstanceInstallStage::Installed,
+            launcher_feature_version: LauncherFeatureVersion::MOST_RECENT,
+            update_channel: ReleaseChannel::Release,
+            name: "Synthetic version switch".into(),
+            icon_path: None,
+            created: now,
+            modified: now,
+            last_played: None,
+            submitted_time_played: 0,
+            recent_time_played: 0,
+        };
+        let instance_path = state.directories.instances_dir().join(&instance.path);
+        tokio::fs::create_dir_all(instance_path.join("mods")).await?;
+        tokio::fs::write(instance_path.join("mods/legacy.jar"), b"fixture mod").await?;
+        tokio::fs::write(instance_path.join("mods/locked.jar"), b"locked mod!").await?;
+        let mut tx = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+        instance_rows::insert_instance(&instance, &mut tx).await?;
+        instance_rows::upsert_instance_link(id, &InstanceLink::Unmanaged, &mut tx).await?;
+        content_rows::insert_content_set(
+            &ContentSet {
+                id: content_set_id.to_owned(),
+                instance_id: id.to_owned(),
+                name: "Original".into(),
+                source_kind: ContentSourceKind::Local,
+                status: ContentSetStatus::Available,
+                game_version: "1.20.1".into(),
+                protocol_version: Some(763),
+                loader: ModLoader::Fabric,
+                loader_version: Some("0.15.0".into()),
+                created: now,
+                modified: now,
+            },
+            &mut tx,
+        ).await?;
+        for (file_id, name, bytes) in [
+            ("instance-file:legacy", "legacy.jar", b"fixture mod"),
+            ("instance-file:locked", "locked.jar", b"locked mod!"),
+        ] {
+            content_rows::upsert_instance_file(
+                &InstanceFile {
+                    id: file_id.to_owned(),
+                    instance_id: id.to_owned(),
+                    relative_path: format!("mods/{name}"),
+                    file_name: name.to_owned(),
+                    enabled: true,
+                    sha1: sha1_smol::Sha1::from(bytes).hexdigest(),
+                    size: bytes.len() as u64,
+                    missing: false,
+                    added_at: now,
+                    modified_at: now,
+                },
+                &mut tx,
+            ).await?;
+        }
+        content_rows::insert_instance_file_lock("instance-file:locked", &mut tx).await?;
+        tx.commit().await?;
+        let original = crate::state::get_instance(id, &state.pool).await?.context("missing synthetic instance")?;
+        let job = Uuid::new_v4();
+        let snapshot = recovery::prepare_instance_update_backup(job, &original, None, &state).await?;
+        crate::state::instances::commands::set_instance_install_stage(
+            id, InstanceInstallStage::MinecraftInstalling, &state.pool,
+        ).await?;
+        apply_version_switch(job, id, InstanceVersionSwitch {
+            game_version: "1.21.1".into(),
+            loader: ModLoader::Vanilla,
+            loader_version: None,
+            disable_mods: vec!["mods/legacy.jar".into()],
+        }, &state).await?;
+
+        let modified = crate::state::get_instance(id, &state.pool).await?.context("missing switched instance")?;
+        assert_eq!(modified.applied_content_set.game_version, "1.21.1");
+        assert_eq!(modified.applied_content_set.loader, ModLoader::Vanilla);
+        assert!(!instance_path.join("mods/legacy.jar").exists());
+        assert_eq!(tokio::fs::read(instance_path.join("mods/legacy.jar.disabled")).await?, b"fixture mod");
+        assert!(instance_path.join("mods/locked.jar").exists());
+
+        recovery::restore_instance_update(&snapshot, &InstallRollbackState {
+            instance: original,
+            install_stage: InstanceInstallStage::Installed,
+        }, &state).await?;
+
+        let restored = crate::state::get_instance(id, &state.pool).await?.context("missing rolled-back instance")?;
+        assert_eq!(restored.instance.install_stage, InstanceInstallStage::Installed);
+        assert_eq!(restored.applied_content_set.game_version, "1.20.1");
+        assert_eq!(restored.applied_content_set.loader, ModLoader::Fabric);
+        assert_eq!(restored.applied_content_set.loader_version.as_deref(), Some("0.15.0"));
+        assert_eq!(restored.applied_content_set.protocol_version, Some(763));
+        assert_eq!(tokio::fs::read(instance_path.join("mods/legacy.jar")).await?, b"fixture mod");
+        assert!(!instance_path.join("mods/legacy.jar.disabled").exists());
+        assert!(content_rows::get_instance_file_by_relative_path(id, "mods/legacy.jar", &state.pool)
+            .await?.context("missing restored content")?.enabled);
+        assert!(content_rows::is_instance_file_locked(id, "mods/locked.jar", &state.pool).await?);
+        state.pool.close().await;
+        Ok(())
+    }
+}
+
 async fn prepare_existing_rollback(
     job_state: &mut InstallJobState,
     pool: &SqlitePool,
@@ -1669,6 +1863,14 @@ async fn prepare_existing_rollback(
     {
         bail!(ErrorKind::InputError(
             "this instance is not ready to update content".to_string(),
+        ));
+    }
+    if matches!(job_state.request, InstallRequest::InstallExistingInstance { version_switch: Some(_), .. })
+        && (instance.instance.install_stage != InstanceInstallStage::Installed
+            || !matches!(instance.link, InstanceLink::Unmanaged))
+    {
+        bail!(ErrorKind::InputError(
+            "only installed, unmanaged instances can change Minecraft or loader versions this way".into()
         ));
     }
     let install_stage = instance.instance.install_stage;
@@ -1977,12 +2179,65 @@ fn set_initial_display(job_state: &mut InstallJobState) {
                 }
             }
         }
+        InstallRequest::ImportExternalInstance { title, .. } => Some((title.clone(), None)),
         _ => None,
     };
 
     if let Some((title, icon)) = display {
         set_display(job_state, title, icon);
     }
+}
+
+async fn run_external_import(
+    job_id: Uuid,
+    job_state: &mut InstallJobState,
+    state: &State,
+    source: ExternalImportSource,
+    title: String,
+) -> crate::Result<String> {
+    let staging = state.directories.install_backups_dir().join(job_id.to_string());
+    let details = InstallPhaseDetails::Instance { name: title };
+    job_state.paths.staging_dir = Some(staging.clone());
+    update_progress(job_id, job_state, &state.pool, InstallPhaseId::PreparingInstance, details.clone()).await?;
+    tokio::fs::create_dir_all(staging.parent().context("Invalid install staging path")?).await?;
+    tokio::fs::create_dir(&staging).await?;
+
+    let spec = crate::api::pack::import::external::prepare(
+        source, state.directories.instances_dir(), staging.clone(),
+        InstallProgressReporter::new(job_id, job_state.clone(), state.pool.clone()),
+        details.clone(),
+    ).await?;
+    super::control::checkpoint(job_id).await?;
+    crate::launcher::resolve_minecraft_manifest(&spec.game_version, state).await?;
+    if let Some(version) = spec.loader_version.as_deref()
+        && crate::launcher::get_loader_version_from_profile(&spec.game_version, spec.loader, Some(version), &state.directories).await?.is_none()
+    {
+        bail!(ErrorKind::InputError(format!("The exact {} loader version {version} for Minecraft {} is unavailable in ACL.", spec.loader.as_str(), spec.game_version)));
+    }
+    let metadata = crate::api::instance::create(
+        spec.name, spec.game_version, spec.loader, spec.loader_version,
+        None, None, InstanceLink::Unmanaged,
+    ).await?;
+    let instance_id = metadata.instance.id;
+    set_display(job_state, metadata.instance.name, metadata.instance.icon_path);
+    set_instance_id(job_state, instance_id.clone());
+    let record = match store::update_state(job_id, job_state, &state.pool).await {
+        Ok(record) => record,
+        Err(error) => {
+            if let Err(cleanup) = crate::api::instance::remove(&instance_id).await {
+                tracing::warn!(%instance_id, %cleanup, "Could not clean up an unregistered import instance");
+            }
+            return Err(error);
+        }
+    };
+    let _target_guard = reserve_target(&job_state.target)?;
+    lock_install_target(job_state, state).await?;
+    emit_install_job(&record.snapshot()).await?;
+    crate::api::pack::import::finish_import(
+        &instance_id, staging.join("payload"), state,
+        InstallProgressReporter::new(job_id, job_state.clone(), state.pool.clone()), details,
+    ).await?;
+    Ok(instance_id)
 }
 
 fn install_error_view(

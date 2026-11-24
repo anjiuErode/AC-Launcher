@@ -5,9 +5,7 @@ use crate::install::{
     InstallProgress, InstallProgressReporter,
 };
 use crate::state::JavaVersion;
-use crate::util::fetch::{
-    FetchProgressFn, fetch_advanced, fetch_advanced_with_progress, fetch_json,
-};
+use crate::util::fetch::{FetchProgressFn, fetch_download, fetch_json};
 use dashmap::DashMap;
 use reqwest::Method;
 use serde::Deserialize;
@@ -238,32 +236,21 @@ async fn auto_install_java_inner(
                 })
             };
 
-            fetch_advanced_with_progress(
-                Method::GET,
+            fetch_download(
                 &download.download_url,
-                None,
-                None,
-                None,
-                None,
                 loading_bar.as_ref().map(|loading_bar| (loading_bar, 80.0)),
-                None,
                 &state.fetch_semaphore,
                 &state.pool,
                 Some(&mut progress as &mut FetchProgressFn<'_>),
             )
             .await?
         } else {
-            fetch_advanced(
-                Method::GET,
+            fetch_download(
                 &download.download_url,
-                None,
-                None,
-                None,
-                None,
                 loading_bar.as_ref().map(|loading_bar| (loading_bar, 80.0)),
-                None,
                 &state.fetch_semaphore,
                 &state.pool,
+                None,
             )
             .await?
         };

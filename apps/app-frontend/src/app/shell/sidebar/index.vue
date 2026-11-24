@@ -11,7 +11,6 @@ import OnboardingChecklist from '@/features/onboarding/checklist.vue'
 import type { ModrinthCredentials } from '@/helpers/mr_auth'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
 
-
 defineProps<{
 	credentials: ModrinthCredentials | null | undefined
 	hasPlus: boolean
@@ -21,13 +20,13 @@ defineProps<{
 
 const emit = defineEmits<{
 	'create-instance': []
-	'login-modrinth': []
+	'login-minecraft': []
+	'login-guild': []
 }>()
 
 const { formatMessage } = useVIntl()
 const appTheme = useTheme()
-const { hasLoggedIntoMinecraft, hasLoggedIntoModrinth, showChecklist } = injectOnboardingChecklist()
-const showFriendsList = computed(() => !showChecklist.value || hasLoggedIntoModrinth.value)
+const { showModrinthFriends } = injectOnboardingChecklist()
 const accounts = ref<InstanceType<typeof AccountsCard> | null>(null)
 const friends = ref<InstanceType<typeof FriendsList> | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -54,7 +53,6 @@ const minecraftAccounts = computed<MinecraftAccountsActions | null>(() => {
 		refreshValues: card.refreshValues,
 		setEquippedSkin: card.setEquippedSkin,
 		setLoginDisabled: card.setLoginDisabled,
-		login: card.login,
 	}
 })
 
@@ -72,6 +70,10 @@ const scrollbarOptions = Object.freeze({
 })
 
 const messages = defineMessages({
+	minecraftAccount: {
+		id: 'minecraft-account.label',
+		defaultMessage: 'Minecraft account',
+	},
 	playingAs: {
 		id: 'app.sidebar.playing-as',
 		defaultMessage: 'Playing as',
@@ -95,24 +97,21 @@ const messages = defineMessages({
 			>
 				<OnboardingChecklist
 					@create-instance="emit('create-instance')"
-					@login-minecraft="accounts?.login()"
-					@login-modrinth="emit('login-modrinth')"
+					@login-minecraft="emit('login-minecraft')"
+					@login-guild="emit('login-guild')"
 				/>
 				<div id="sidebar-teleport-target" class="sidebar-teleport-content empty:hidden"></div>
 				<div class="sidebar-default-content hidden" :class="{ 'sidebar-enabled': visible }">
-					<div
-						v-show="hasLoggedIntoMinecraft"
-						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
-					>
+					<div class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid">
 						<h3 class="text-base text-primary font-medium m-0">
-							{{ formatMessage(messages.playingAs) }}
+							{{ formatMessage(accounts?.hasAccounts ? messages.playingAs : messages.minecraftAccount) }}
 						</h3>
 						<Suspense>
-							<AccountsCard ref="accounts" />
+							<AccountsCard ref="accounts" @sign-in="emit('login-minecraft')" />
 						</Suspense>
 					</div>
 					<div
-						v-show="showFriendsList"
+						v-show="showModrinthFriends"
 						class="p-4 border-0 border-b-[1px] border-[--brand-gradient-border] border-solid"
 					>
 						<Suspense>

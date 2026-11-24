@@ -133,6 +133,13 @@ export function setupCreationModal(
 			}
 
 			if (config.modpackFilePath.value) {
+				if (config.modpackFilePath.value.toLowerCase().endsWith('.zip')) {
+					await router.push({
+						name: 'CurseForge import',
+						state: { archivePath: config.modpackFilePath.value },
+					})
+					return
+				}
 				const location: CreatePackLocation = {
 					type: 'fromFile',
 					path: config.modpackFilePath.value,

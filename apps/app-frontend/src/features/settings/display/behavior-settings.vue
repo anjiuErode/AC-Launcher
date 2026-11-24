@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import {
 	defineMessages,
-	injectAuth,
 	injectNotificationManager,
-	injectUserPreferences,
 	Toggle,
+	Combobox,
+	type ComboboxOption,
 	useSavable,
 	useVIntl,
 } from '@modrinth/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 
 import { useAppSettings } from '@/composables/use-app-settings.ts'
 import { injectAppSettingsModal } from '@/features/settings/app-settings-modal/context'
@@ -23,26 +23,11 @@ import {
 
 const appSettings = useAppSettings()
 const { formatMessage } = useVIntl()
-const auth = injectAuth()
 const { handleError } = injectNotificationManager()
-const { updatePreferences } = injectUserPreferences()
 const settingsModal = injectAppSettingsModal()
 const queryClient = useQueryClient()
 
 const messages = defineMessages({
-	syncAcrossDevicesTitle: {
-		id: 'app.behavior-settings.sync-across-devices.title',
-		defaultMessage: 'Sync behavior across devices',
-	},
-	syncAcrossDevicesDescription: {
-		id: 'app.behavior-settings.sync-across-devices.description',
-		defaultMessage:
-			"Use these behavior settings everywhere you're signed in. Turn this off to keep separate settings on this device.",
-	},
-	syncAcrossDevicesSignedOutTooltip: {
-		id: 'app.behavior-settings.sync-across-devices.signed-out-tooltip',
-		defaultMessage: 'Sign into a Modrinth account to sync settings.',
-	},
 	startupAndNavigationTitle: {
 		id: 'app.behavior-settings.startup-and-navigation.title',
 		defaultMessage: 'Startup and navigation',
@@ -129,10 +114,22 @@ const messages = defineMessages({
 		defaultMessage:
 			'Skip confirmations for low-risk actions such as duplicate installs, normal content deletion, bulk updates, unlinking, and repairs. Warnings for dangerous actions are always shown.',
 	},
+	fileManagerDefaultTabTitle: {
+		id: 'app.behavior-settings.file-manager-default-tab.title',
+		defaultMessage: '文件管理默认打开项',
+	},
+	fileManagerDefaultTabDescription: {
+		id: 'app.behavior-settings.file-manager-default-tab.description',
+		defaultMessage: '进入实例文件管理时默认显示的分类。',
+	},
+	allFiles: { id: 'app.file-manager.category.all', defaultMessage: '全部文件' },
+	mods: { id: 'app.file-manager.category.mods', defaultMessage: '模组' },
+	resourcepacks: { id: 'app.file-manager.category.resourcepacks', defaultMessage: '资源包' },
+	shaderpacks: { id: 'app.file-manager.category.shaderpacks', defaultMessage: '光影包' },
+	schematics: { id: 'app.file-manager.category.schematics', defaultMessage: '投影原理图' },
 })
 
 type BehaviorSettingsState = {
-	syncBehaviorAcrossDevices: boolean
 	minimizeApp: boolean
 	refocusOnGameClose: boolean
 	hideRightSidebar: boolean
@@ -141,6 +138,7 @@ type BehaviorSettingsState = {
 	hideNametag: boolean
 	warnOnUnknownModpacks: boolean
 	skipNonEssentialWarnings: boolean
+	fileManagerDefaultTab: AppSettings['file_manager_default_tab']
 }
 
 const settingsQuery = useQuery(appSettingsQueryOptions())
@@ -148,41 +146,34 @@ await settingsQuery.suspense()
 
 function getBehaviorSettingsState(settings: AppSettings): BehaviorSettingsState {
 	return {
-		syncBehaviorAcrossDevices: settings.sync_behavior_across_devices,
 		minimizeApp: settings.hide_on_process_start,
 		refocusOnGameClose: settings.refocus_on_game_close,
 		compactInstanceCards: settings.compact_instance_cards,
 		showPlayTime: settings.show_play_time,
 		warnOnUnknownModpacks: settings.warn_on_unknown_modpacks,
 		skipNonEssentialWarnings: settings.skip_non_essential_warnings,
+		fileManagerDefaultTab: settings.file_manager_default_tab ?? 'all',
 		hideRightSidebar: settings.toggle_sidebar,
 		hideNametag: settings.hide_nametag_skins_page,
 	}
 }
 
+const fileManagerTabOptions = computed<ComboboxOption<AppSettings['file_manager_default_tab']>[]>(() => [
+	{ value: 'all', label: formatMessage(messages.allFiles) },
+	{ value: 'mods', label: formatMessage(messages.mods) },
+	{ value: 'resourcepacks', label: formatMessage(messages.resourcepacks) },
+	{ value: 'shaderpacks', label: formatMessage(messages.shaderpacks) },
+	{ value: 'schematics', label: formatMessage(messages.schematics) },
+])
+
 const settingsMutation = useMutation({
 	mutationKey: appSettingsKeys.update,
 	scope: { id: 'app-settings' },
 	mutationFn: async (value: BehaviorSettingsState) => {
-		if (value.syncBehaviorAcrossDevices && auth.user.value) {
-			await updatePreferences({
-				behavior: {
-					minimize_app: value.minimizeApp,
-					refocus_on_game_close: value.refocusOnGameClose,
-					hide_right_sidebar: value.hideRightSidebar,
-					compact_instance_cards: value.compactInstanceCards,
-					show_play_time: value.showPlayTime,
-					hide_nametag: value.hideNametag,
-					warn_on_unknown_modpacks: value.warnOnUnknownModpacks,
-					skip_non_essential_warnings: value.skipNonEssentialWarnings,
-				},
-			})
-		}
-
 		const latestSettings = await get()
 		const nextSettings: AppSettings = {
 			...latestSettings,
-			sync_behavior_across_devices: value.syncBehaviorAcrossDevices,
+			sync_behavior_across_devices: false,
 			hide_on_process_start: value.minimizeApp,
 			toggle_sidebar: value.hideRightSidebar,
 			hide_nametag_skins_page: value.hideNametag,
@@ -191,11 +182,11 @@ const settingsMutation = useMutation({
 			show_play_time: value.showPlayTime,
 			warn_on_unknown_modpacks: value.warnOnUnknownModpacks,
 			skip_non_essential_warnings: value.skipNonEssentialWarnings,
+			file_manager_default_tab: value.fileManagerDefaultTab,
 		}
 
 		await set(nextSettings)
 		queryClient.setQueryData(appSettingsKeys.all, nextSettings)
-		appSettings.setBehaviorSyncAcrossDevices(value.syncBehaviorAcrossDevices)
 		appSettings.refocusOnGameClose = value.refocusOnGameClose
 		appSettings.compactInstanceCards = value.compactInstanceCards
 		appSettings.showPlayTime = value.showPlayTime
@@ -238,34 +229,7 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-	<section class="border-0 border-b border-solid border-divider pb-6">
-		<div class="flex items-center justify-between gap-4">
-			<div>
-				<h2 id="sync-behavior-across-devices-label" class="m-0 text-lg font-semibold text-contrast">
-					{{ formatMessage(messages.syncAcrossDevicesTitle) }}
-				</h2>
-				<p class="m-0 mt-1 text-secondary">
-					{{ formatMessage(messages.syncAcrossDevicesDescription) }}
-				</p>
-			</div>
-			<span
-				v-tooltip="
-					!auth.user.value ? formatMessage(messages.syncAcrossDevicesSignedOutTooltip) : undefined
-				"
-				class="inline-flex shrink-0"
-			>
-				<Toggle
-					id="sync-behavior-across-devices"
-					:model-value="Boolean(auth.user.value) && current.syncBehaviorAcrossDevices"
-					:disabled="!auth.user.value"
-					aria-labelledby="sync-behavior-across-devices-label"
-					@update:model-value="current.syncBehaviorAcrossDevices = $event"
-				/>
-			</span>
-		</div>
-	</section>
-
-	<section class="mt-6">
+	<section>
 		<h2 class="m-0 text-xl font-semibold text-contrast">
 			{{ formatMessage(messages.startupAndNavigationTitle) }}
 		</h2>
@@ -296,6 +260,23 @@ onBeforeUnmount(() => {
 					v-model="current.refocusOnGameClose"
 					aria-labelledby="refocus-on-game-close-label"
 					aria-describedby="refocus-on-game-close-description"
+				/>
+			</div>
+
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<h3 id="file-manager-default-tab-label" class="m-0 text-lg font-semibold text-contrast">
+						{{ formatMessage(messages.fileManagerDefaultTabTitle) }}
+					</h3>
+					<p id="file-manager-default-tab-description" class="m-0 mt-1">
+						{{ formatMessage(messages.fileManagerDefaultTabDescription) }}
+					</p>
+				</div>
+				<Combobox
+					v-model="current.fileManagerDefaultTab"
+					:options="fileManagerTabOptions"
+					aria-labelledby="file-manager-default-tab-label"
+					class="min-w-48"
 				/>
 			</div>
 

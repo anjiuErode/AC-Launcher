@@ -206,6 +206,7 @@ pub(crate) async fn list_content(
         cache_behaviour,
         false,
         ContentReadMode::Reconcile,
+        false,
         state,
     )
     .await
@@ -222,6 +223,7 @@ pub(crate) async fn list_indexed_content(
         cache_behaviour,
         false,
         ContentReadMode::Indexed,
+        false,
         state,
     )
     .await
@@ -237,6 +239,23 @@ pub(crate) async fn list_pack_content(
         None,
         true,
         ContentReadMode::Reconcile,
+        false,
+        state,
+    )
+    .await
+}
+
+pub(crate) async fn list_file_manager_content(
+    instance_id: &str,
+    state: &State,
+) -> crate::Result<Vec<ContentItem>> {
+    list_content_inner(
+        instance_id,
+        None,
+        None,
+        false,
+        ContentReadMode::Reconcile,
+        true,
         state,
     )
     .await
@@ -248,6 +267,7 @@ async fn list_content_inner(
     cache_behaviour: Option<CacheBehaviour>,
     packs_only: bool,
     read_mode: ContentReadMode,
+    include_modpack: bool,
     state: &State,
 ) -> crate::Result<Vec<ContentItem>> {
     let resolved = resolve_content_scope_with_instance(
@@ -263,7 +283,7 @@ async fn list_content_inner(
     .await?;
     let imported_modpack_scope = is_imported_modpack_scope(&link);
     let linked_modpack_source_kind = linked_modpack_source_kind(&link);
-    let modpack_ids = if imported_modpack_scope {
+    let modpack_ids = if include_modpack || imported_modpack_scope {
         None
     } else {
         match linked_modpack_ids(&link) {
@@ -278,7 +298,9 @@ async fn list_content_inner(
             None => None,
         }
     };
-    let filter = if imported_modpack_scope {
+    let filter = if include_modpack {
+        ContentFilter::All
+    } else if imported_modpack_scope {
         ContentFilter::ExcludeSourceKind {
             source_kind: ContentSourceKind::ImportedModpack,
             exclude_untracked: resolved.instance.install_stage

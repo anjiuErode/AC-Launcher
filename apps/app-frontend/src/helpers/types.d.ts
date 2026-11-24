@@ -220,6 +220,7 @@ type AppSettings = {
 
 	theme: 'dark' | 'light' | 'oled' | 'retro' | 'system'
 	default_page: 'Home' | 'Library'
+	file_manager_default_tab: 'all' | 'mods' | 'resourcepacks' | 'shaderpacks' | 'schematics'
 	collapsed_navigation: boolean
 	advanced_rendering: boolean
 	native_decorations: boolean

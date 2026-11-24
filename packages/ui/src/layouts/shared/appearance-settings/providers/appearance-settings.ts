@@ -27,7 +27,7 @@ interface ThemeSettings {
 	system: AppearanceRef<AppearanceTheme>
 	preferredDark: AppearanceRef<AppearanceTheme>
 	update: AppearanceSetter<AppearanceThemeSelection>
-	syncAcrossDevices: AppearanceSetting<boolean>
+	syncAcrossDevices?: AppearanceSetting<boolean>
 }
 
 interface ProjectLayoutSettings {
@@ -57,8 +57,8 @@ export interface AppearanceSettingsProviderOptions {
 		system: AppearanceRef<AppearanceTheme>
 		preferredDark: AppearanceRef<AppearanceTheme>
 		set: AppearanceSetter<AppearanceThemeSelection>
-		syncAcrossDevices: WritableAppearanceSetting<boolean>
-		syncDisabled: AppearanceRef<boolean>
+		syncAcrossDevices?: WritableAppearanceSetting<boolean>
+		syncDisabled?: AppearanceRef<boolean>
 	}
 	advancedRendering: WritableAppearanceSetting<boolean>
 	nativeDecorations?: WritableAppearanceSetting<boolean>
@@ -71,7 +71,7 @@ export interface AppearanceSettingsProviderOptions {
 		value: AppearanceRef<SidebarPreferences>
 		set: (key: keyof SidebarPreferences, enabled: boolean) => void | Promise<void>
 	}
-	updatePreferences: (
+	updatePreferences?: (
 		preferences: Labrinth.Users.v3.PartialUserPreferences,
 	) => Promise<Labrinth.Users.v3.UserPreferences | undefined>
 }
@@ -107,9 +107,11 @@ export function provideAppearanceSettings(
 ): AppearanceSettingsContext {
 	const projectLayouts = options.projectLayouts
 	const sidebarPreferences = options.sidebarPreferences
+	const themeSync = options.theme.syncAcrossDevices
+	const updatePreferences = options.updatePreferences
 
 	async function syncThemePreference(theme: AppearanceThemeSelection): Promise<void> {
-		await options.updatePreferences({
+		await updatePreferences?.({
 			appearance:
 				theme === 'system'
 					? { auto: true }
@@ -124,14 +126,14 @@ export function provideAppearanceSettings(
 		try {
 			await syncThemePreference(theme)
 		} catch {
-			await options.theme.syncAcrossDevices.set(false)
+			await themeSync?.set(false)
 		}
 	}
 
 	async function updateTheme(theme: AppearanceThemeSelection): Promise<void> {
 		await options.theme.set(theme)
 		if (options.deferPersistence) return
-		if (!toValue(options.theme.syncAcrossDevices.value) || toValue(options.theme.syncDisabled)) {
+		if (!themeSync || !toValue(themeSync.value) || toValue(options.theme.syncDisabled)) {
 			return
 		}
 
@@ -139,9 +141,9 @@ export function provideAppearanceSettings(
 	}
 
 	async function updateThemeSync(enabled: boolean): Promise<void> {
-		if (toValue(options.theme.syncDisabled)) return
+		if (!themeSync || toValue(options.theme.syncDisabled)) return
 
-		await options.theme.syncAcrossDevices.set(enabled)
+		await themeSync.set(enabled)
 		if (options.deferPersistence) return
 		if (enabled) {
 			await syncThemeOrDisable(toValue(options.theme.current))
@@ -163,7 +165,7 @@ export function provideAppearanceSettings(
 		try {
 			const layouts: Partial<Labrinth.Users.v3.LayoutPreferences> = {}
 			layouts[layoutPreferenceKeys[type]] = layout
-			await options.updatePreferences({ layouts })
+			await updatePreferences?.({ layouts })
 		} catch {
 			const currentLayout = toValue(projectLayouts.value).find(
 				(setting) => setting.type === type,
@@ -186,7 +188,7 @@ export function provideAppearanceSettings(
 		try {
 			const sidebars: Partial<SidebarPreferences> = {}
 			sidebars[key] = enabled
-			await options.updatePreferences({ sidebars })
+			await updatePreferences?.({ sidebars })
 		} catch {
 			if (toValue(sidebarPreferences.value)[key] === enabled) {
 				await sidebarPreferences.set(key, previousValue)
@@ -201,11 +203,13 @@ export function provideAppearanceSettings(
 			system: options.theme.system,
 			preferredDark: options.theme.preferredDark,
 			update: updateTheme,
-			syncAcrossDevices: {
-				value: options.theme.syncAcrossDevices.value,
-				disabled: options.theme.syncDisabled,
-				update: updateThemeSync,
-			},
+			syncAcrossDevices: themeSync
+				? {
+						value: themeSync.value,
+						disabled: options.theme.syncDisabled,
+						update: updateThemeSync,
+					}
+				: undefined,
 		},
 		advancedRendering: createSetting(options.advancedRendering),
 		nativeDecorations: options.nativeDecorations

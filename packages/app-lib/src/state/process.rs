@@ -27,6 +27,11 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use uuid::Uuid;
 
+#[path = "launch_diagnostics.rs"]
+mod launch_diagnostics;
+use launch_diagnostics::diagnose_launch_lines;
+pub use launch_diagnostics::{LaunchDiagnostic, LaunchIssue};
+
 const LAUNCHER_LOG_PATH: &str = "launcher_log.txt";
 const LOG_BUFFER_CAPACITY: usize = 50_000;
 
@@ -184,6 +189,7 @@ pub(crate) async fn instance_has_running_process(
 
 pub struct ProcessManager {
     processes: DashMap<Uuid, Process>,
+    launch_diagnostics: DashMap<String, LaunchDiagnostic>,
 }
 
 impl Default for ProcessManager {
@@ -196,6 +202,35 @@ impl ProcessManager {
     pub fn new() -> Self {
         Self {
             processes: DashMap::new(),
+            launch_diagnostics: DashMap::new(),
+        }
+    }
+
+    pub fn launch_diagnostic(&self, instance_id: &str) -> Option<LaunchDiagnostic> {
+        self.launch_diagnostics
+            .get(instance_id)
+            .map(|entry| entry.value().clone())
+    }
+
+    pub(crate) fn clear_launch_diagnostic(&self, instance_id: &str) {
+        self.launch_diagnostics.remove(instance_id);
+    }
+
+    pub(crate) fn record_launch_error(&self, instance_id: &str, error: &crate::Error) {
+        let issue = match crate::error::error_code(error) {
+            "java_error" => Some(LaunchIssue::Java),
+            "hash_error" => Some(LaunchIssue::GameLibrary),
+            _ => diagnose_launch_lines(format!("{error:#}").lines()),
+        };
+        if let Some(issue) = issue {
+            self.launch_diagnostics.insert(
+                instance_id.to_string(),
+                LaunchDiagnostic {
+                    run_id: Uuid::new_v4(),
+                    exit_code: None,
+                    issue,
+                },
+            );
         }
     }
 
@@ -210,6 +245,7 @@ impl ProcessManager {
         post_exit_env_vars: Vec<(String, String)>,
         logs_folder: PathBuf,
         xml_logging: bool,
+        external_access_token: Option<&str>,
         main_class_keep_alive: TempDir,
         rpc_server: RpcServer,
         state: &Arc<State>,
@@ -236,6 +272,7 @@ impl ProcessManager {
         let log_path = logs_folder.join(LAUNCHER_LOG_PATH);
 
         clear_log_buffer(instance_id);
+        self.clear_launch_diagnostic(instance_id);
 
         {
             let mut log_file = OpenOptions::new()
@@ -272,6 +309,7 @@ impl ProcessManager {
                 instance_name: instance_name.to_string(),
             },
             child: mc_proc,
+            stop_requested: false,
             rpc_server,
             _main_class_keep_alive: main_class_keep_alive,
         };
@@ -320,7 +358,9 @@ impl ProcessManager {
 
         let metadata = process.metadata.clone();
 
+        let external_access_token = external_access_token.map(Arc::<str>::from);
         if let Some(stdout) = stdout {
+            let external_access_token = external_access_token.clone();
             let log_path_clone = log_path.clone();
 
             let instance_id = metadata.instance_id.clone();
@@ -333,6 +373,7 @@ impl ProcessManager {
                     stdout,
                     log_path_clone,
                     xml_logging,
+                    external_access_token.as_deref(),
                     &pool,
                 )
                 .await;
@@ -352,6 +393,7 @@ impl ProcessManager {
                     stderr,
                     log_path_clone,
                     xml_logging,
+                    external_access_token.as_deref(),
                     &pool,
                 )
                 .await;
@@ -416,14 +458,18 @@ impl ProcessManager {
 
     pub async fn kill(&self, id: Uuid) -> crate::Result<()> {
         if let Some(mut process) = self.processes.get_mut(&id) {
-            process.child.kill().await?;
+            process.stop_requested = true;
+            if let Err(error) = process.child.kill().await {
+                process.stop_requested = false;
+                return Err(error.into());
+            }
         }
 
         Ok(())
     }
 
-    fn remove(&self, id: Uuid) {
-        self.processes.remove(&id);
+    fn remove(&self, id: Uuid) -> Option<Process> {
+        self.processes.remove(&id).map(|(_, process)| process)
     }
 }
 
@@ -440,6 +486,7 @@ pub struct ProcessMetadata {
 struct Process {
     metadata: ProcessMetadata,
     child: Child,
+    stop_requested: bool,
     _main_class_keep_alive: TempDir,
     rpc_server: RpcServer,
 }
@@ -465,11 +512,19 @@ impl Process {
         reader: R,
         log_path: impl AsRef<Path>,
         xml_logging: bool,
+        external_access_token: Option<&str>,
         pool: &SqlitePool,
     ) where
         R: tokio::io::AsyncRead + Unpin,
     {
         let mut buf_reader = BufReader::new(reader);
+        let redact = |value: &str| {
+            if let Some(token) = external_access_token.filter(|token| !token.is_empty()) {
+                value.replace(token, "{MINECRAFT_ACCESS_TOKEN}")
+            } else {
+                value.to_owned()
+            }
+        };
 
         if xml_logging {
             let mut reader = Reader::from_reader(buf_reader);
@@ -486,9 +541,9 @@ impl Process {
                 match reader.read_event_into_async(&mut buf).await {
                     Err(e) => {
                         tracing::error!(
-                            "Error at position {}: {:?}",
+                            "Error at position {}: {}",
                             reader.buffer_position(),
-                            e
+                            redact(&e.to_string())
                         );
                         break;
                     }
@@ -508,9 +563,7 @@ impl Process {
                                         attr.key.into_inner(),
                                     )
                                     .to_string();
-                                    let value =
-                                        String::from_utf8_lossy(&attr.value)
-                                            .to_string();
+                                    let value = redact(&String::from_utf8_lossy(&attr.value));
 
                                     match key.as_str() {
                                         "logger" => {
@@ -548,7 +601,7 @@ impl Process {
                             b"log4j:Message" => {
                                 in_message = false;
                                 current_event.message =
-                                    Some(current_content.clone());
+                                    Some(redact(&current_content));
                             }
                             b"log4j:Throwable" => {
                                 in_throwable = false;
@@ -556,7 +609,7 @@ impl Process {
                                     if current_content.is_empty() {
                                         None
                                     } else {
-                                        Some(current_content.clone())
+                                        Some(redact(&current_content))
                                     };
 
                                 // Write log entry + throwable to file
@@ -651,6 +704,7 @@ impl Process {
                             && !e.inplace_trim_start()
                             && let Ok(text) = e.xml_content()
                         {
+                            let text = redact(&text);
                             if let Err(e) = Process::append_to_log_file(
                                 &log_path,
                                 &format!("{text}\n"),
@@ -684,13 +738,14 @@ impl Process {
                 }
 
                 if !line.is_empty() {
-                    if let Err(e) = Self::append_to_log_file(&log_path, &line) {
+                    let redacted = redact(&line);
+                    if let Err(e) = Self::append_to_log_file(&log_path, &redacted) {
                         tracing::warn!("Failed to write to log file: {}", e);
                     }
-                    Self::emit_legacy_log(instance_id, line.trim_ascii_end());
+                    Self::emit_legacy_log(instance_id, redacted.trim_ascii_end());
                     if let Err(e) = Self::maybe_handle_old_server_join_logging(
                         instance_id,
-                        line.trim_ascii_end(),
+                        redacted.trim_ascii_end(),
                         pool,
                     )
                     .await
@@ -969,7 +1024,23 @@ impl Process {
             .await;
         }
 
-        state.process_manager.remove(uuid);
+        let process = state.process_manager.remove(uuid);
+        if !mc_exit_status.success() && process.is_some_and(|process| !process.stop_requested) {
+            let issue = LOG_BUFFERS
+                .get(&instance_id)
+                .and_then(|buffer| {
+                    diagnose_launch_lines(buffer.lines.iter().rev().take(600).map(String::as_str))
+                })
+                .unwrap_or(LaunchIssue::UnknownExit);
+            state.process_manager.launch_diagnostics.insert(
+                instance_id.clone(),
+                LaunchDiagnostic {
+                    run_id: uuid,
+                    exit_code: mc_exit_status.code(),
+                    issue,
+                },
+            );
+        }
         clear_persisted_process(&state.pool, persisted_process).await;
         let sync_instance_id = instance_id.clone();
         tokio::spawn(async move {

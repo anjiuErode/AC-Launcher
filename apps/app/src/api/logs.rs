@@ -23,6 +23,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             logs_delete_logs_by_filename,
             logs_get_latest_log_cursor,
             logs_get_live_log_buffer,
+            logs_launch_diagnostic,
             logs_clear_live_log_buffer,
             logs_log_webview,
         ])
@@ -115,6 +116,14 @@ pub async fn logs_get_live_log_buffer(
     instance_id: &str,
 ) -> Result<CensoredString> {
     Ok(logs::get_live_log_buffer(instance_id).await?)
+}
+
+#[tauri::command]
+pub async fn logs_launch_diagnostic(
+    instance_id: &str,
+) -> Result<Option<logs::LaunchDiagnostic>> {
+    let state = theseus::State::get().await?;
+    Ok(state.process_manager.launch_diagnostic(instance_id))
 }
 
 /// Clear the live log buffer for an instance.

@@ -3,6 +3,7 @@ import { PlusIcon, SearchIcon, SquarePlusIcon } from '@modrinth/assets'
 import { Button, defineMessages, Input, useVIntl } from '@modrinth/ui'
 import { computed, inject } from 'vue'
 
+import InstanceArchiveRestoreButton from '@/components/ui/InstanceArchiveRestoreButton.vue'
 import FilterMenu from '@/components/ui/library/library-toolbar/filter-menu.vue'
 import NewGroupModal from '@/components/ui/library/library-toolbar/new-group-modal.vue'
 import SortMenu from '@/components/ui/library/library-toolbar/sort-menu.vue'
@@ -41,6 +42,7 @@ function openNewGroup() {
 				<SquarePlusIcon />
 				{{ formatMessage(messages.newGroup) }}
 			</Button>
+			<InstanceArchiveRestoreButton />
 			<Button type="colored" color="brand" @click="showCreationModal?.()">
 				<PlusIcon />
 				{{ formatMessage(messages.newInstance) }}

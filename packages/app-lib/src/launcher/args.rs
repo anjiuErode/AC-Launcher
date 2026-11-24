@@ -3,7 +3,6 @@ use crate::instance::QuickPlayType;
 use crate::launcher::library::LibraryExt;
 use crate::launcher::quick_play_version::QuickPlayServerVersion;
 use crate::launcher::{QuickPlayVersion, parse_rules};
-use crate::state::Credentials;
 use crate::{
     state::{MemorySettings, WindowSize},
     util::{io::IOError, platform::classpath_separator},
@@ -24,6 +23,14 @@ use uuid::Uuid;
 
 // Replaces the space separator with a newline character, as to not split the arguments
 const TEMPORARY_REPLACE_CHAR: &str = "\n";
+
+pub(crate) struct GameLaunchIdentity {
+    pub name: String,
+    pub uuid: Uuid,
+    pub access_token: String,
+    pub user_type: &'static str,
+    pub authlib_jvm_args: Vec<String>,
+}
 
 pub fn get_class_paths(
     libraries_path: &Path,
@@ -241,10 +248,10 @@ fn parse_jvm_argument(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn get_minecraft_arguments(
+pub fn get_minecraft_arguments(
     arguments: Option<&[Argument]>,
     legacy_arguments: Option<&str>,
-    credentials: &Credentials,
+    identity: &GameLaunchIdentity,
     version: &str,
     asset_index_name: &str,
     game_directory: &Path,
@@ -255,8 +262,6 @@ pub async fn get_minecraft_arguments(
     quick_play_type: &QuickPlayType,
     quick_play_version: QuickPlayVersion,
 ) -> crate::Result<Vec<String>> {
-    let access_token = credentials.access_token.clone();
-    let profile = credentials.maybe_online_profile().await;
     let mut parsed_arguments = Vec::new();
 
     if let Some(arguments) = arguments {
@@ -266,9 +271,7 @@ pub async fn get_minecraft_arguments(
             |arg| {
                 parse_minecraft_argument(
                     arg,
-                    &access_token,
-                    &profile.name,
-                    profile.id,
+                    identity,
                     version,
                     asset_index_name,
                     game_directory,
@@ -282,12 +285,12 @@ pub async fn get_minecraft_arguments(
             quick_play_type,
         )?;
     } else if let Some(legacy_arguments) = legacy_arguments {
-        for x in legacy_arguments.split(' ') {
+        let legacy_arguments = shlex::split(legacy_arguments)
+            .context("invalid legacy Minecraft launch arguments")?;
+        for argument in legacy_arguments {
             parsed_arguments.push(parse_minecraft_argument(
-                &x.replace(' ', TEMPORARY_REPLACE_CHAR),
-                &access_token,
-                &profile.name,
-                profile.id,
+                &argument,
+                identity,
                 version,
                 asset_index_name,
                 game_directory,
@@ -317,9 +320,7 @@ pub async fn get_minecraft_arguments(
 #[allow(clippy::too_many_arguments)]
 fn parse_minecraft_argument(
     argument: &str,
-    access_token: &str,
-    username: &str,
-    uuid: Uuid,
+    identity: &GameLaunchIdentity,
     version: &str,
     asset_index_name: &str,
     game_directory: &Path,
@@ -329,17 +330,17 @@ fn parse_minecraft_argument(
     quick_play_type: &QuickPlayType,
 ) -> crate::Result<String> {
     Ok(argument
-        .replace("${accessToken}", access_token)
-        .replace("${auth_access_token}", access_token)
-        .replace("${auth_session}", access_token)
-        .replace("${auth_player_name}", username)
+        .replace("${accessToken}", &identity.access_token)
+        .replace("${auth_access_token}", &identity.access_token)
+        .replace("${auth_session}", &identity.access_token)
+        .replace("${auth_player_name}", &identity.name)
         // TODO: add auth xuid eventually
         .replace("${auth_xuid}", "0")
-        .replace("${auth_uuid}", &uuid.simple().to_string())
-        .replace("${uuid}", &uuid.simple().to_string())
+        .replace("${auth_uuid}", &identity.uuid.simple().to_string())
+        .replace("${uuid}", &identity.uuid.simple().to_string())
         .replace("${clientid}", "c4502edb-87c6-40cb-b595-64a280cf8906")
         .replace("${user_properties}", "{}")
-        .replace("${user_type}", "msa")
+        .replace("${user_type}", identity.user_type)
         .replace("${version_name}", version)
         .replace("${assets_index_name}", asset_index_name)
         .replace(
@@ -527,4 +528,44 @@ pub async fn get_processor_main_class(
     .await??;
 
     Ok(main_class)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launcher::quick_play_version::QuickPlaySingleplayerVersion;
+
+    #[test]
+    fn legacy_arguments_keep_quoted_values_and_the_selected_offline_identity() {
+        let identity = GameLaunchIdentity {
+            name: "LocalPlayer".into(),
+            uuid: Uuid::nil(),
+            access_token: "0".into(),
+            user_type: "legacy",
+            authlib_jvm_args: Vec::new(),
+        };
+        let directory = tempfile::tempdir().unwrap();
+        let args = get_minecraft_arguments(
+            None,
+            Some(r#"--username "${auth_player_name}" --userType ${user_type} --label "two words" --session ${auth_session}"#),
+            &identity,
+            "1.12.2",
+            "1.12",
+            directory.path(),
+            directory.path(),
+            &VersionType::Release,
+            WindowSize(854, 480),
+            "x86_64",
+            &QuickPlayType::None,
+            QuickPlayVersion {
+                server: QuickPlayServerVersion::Unsupported,
+                singleplayer: QuickPlaySingleplayerVersion::Unsupported,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            args,
+            ["--username", "LocalPlayer", "--userType", "legacy", "--label", "two words", "--session", "0"],
+        );
+    }
 }

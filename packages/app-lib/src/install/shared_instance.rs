@@ -1,3 +1,4 @@
+use super::control::download_step;
 use super::events::InstallProgressReporter;
 use super::model::{
     InstallJobState, InstallPhaseDetails, InstallPhaseId,
@@ -21,6 +22,7 @@ use crate::state::{
     CachedEntry, ContentSetSyncStatus, ContentSourceKind, InstanceLink,
     ProjectType, SharedInstanceAttachmentInput, SharedInstanceRole, State,
 };
+use crate::util::download::{DownloadBody, download_body};
 use crate::util::fetch::{DownloadReason, REQWEST_CLIENT};
 use anyhow::{Context, bail};
 use futures::StreamExt;
@@ -1050,59 +1052,18 @@ async fn install_shared_instance_external_file(
         )));
     }
 
-    let response = REQWEST_CLIENT.get(&file.url).send().await?;
-
-    if !response.status().is_success() {
-        bail!(
-            "shared instance external file download failed with status {}",
-            response.status()
-        );
-    }
-
-    if response
-        .content_length()
-        .is_some_and(|content_length| content_length != file.file_size)
+    let body = shared_file_body(file, true).await?;
+    let segmented = body.is_segmented();
+    let mut high_water = 0;
+    let bytes = match read_shared_file(body, file, downloaded, &mut high_water)
+        .await
     {
-        bail!(
-            "shared instance external file {} has an unexpected size",
-            file.file_name
-        );
-    }
-
-    let mut stream = response.bytes_stream();
-    let initial_capacity = usize::try_from(
-        file.file_size.min(MAX_SHARED_INSTANCE_INITIAL_BUFFER_SIZE),
-    )
-    .context(ErrorKind::InputError(format!(
-        "shared instance external file {} is too large",
-        file.file_name
-    )))?;
-    let mut bytes = Vec::with_capacity(initial_capacity);
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        let downloaded_size = (bytes.len() as u64)
-            .checked_add(chunk.len() as u64)
-            .ok_or(ErrorKind::InputError(format!(
-                "shared instance external file {} is too large",
-                file.file_name
-            )))?;
-        if downloaded_size > file.file_size {
-            bail!(
-                "shared instance external file {} has an unexpected size",
-                file.file_name
-            );
+        Err(_) if segmented => {
+            let body = shared_file_body(file, false).await?;
+            read_shared_file(body, file, downloaded, &mut high_water).await?
         }
-        downloaded.add(chunk.len() as u64);
-        bytes.extend_from_slice(&chunk);
-    }
-
-    if bytes.len() as u64 != file.file_size {
-        bail!(
-            "shared instance external file {} has an unexpected size",
-            file.file_name
-        );
-    }
-    let bytes = bytes::Bytes::from(bytes);
+        result => result?,
+    };
 
     if file.file_type == CONFIG_BUNDLE_FILE_TYPE {
         return install_shared_instance_config_bundle(
@@ -1136,6 +1097,49 @@ async fn install_shared_instance_external_file(
     Ok(())
 }
 
+async fn read_shared_file(
+    body: DownloadBody,
+    file: &SharedInstanceExternalFileData,
+    downloaded: &DownloadedBytes,
+    high_water: &mut u64,
+) -> crate::Result<bytes::Bytes> {
+    let mut stream = controlled_shared_stream(body).boxed();
+    let initial_capacity = usize::try_from(
+        file.file_size.min(MAX_SHARED_INSTANCE_INITIAL_BUFFER_SIZE),
+    )
+    .context(ErrorKind::InputError(format!(
+        "shared instance external file {} is too large",
+        file.file_name
+    )))?;
+    let mut bytes = Vec::with_capacity(initial_capacity);
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        let downloaded_size = (bytes.len() as u64)
+            .checked_add(chunk.len() as u64)
+            .ok_or(ErrorKind::InputError(format!(
+                "shared instance external file {} is too large",
+                file.file_name
+            )))?;
+        if downloaded_size > file.file_size {
+            bail!(
+                "shared instance external file {} has an unexpected size",
+                file.file_name
+            );
+        }
+        downloaded.add(downloaded_size.saturating_sub(*high_water));
+        *high_water = (*high_water).max(downloaded_size);
+        bytes.extend_from_slice(&chunk);
+    }
+
+    if bytes.len() as u64 != file.file_size {
+        bail!(
+            "shared instance external file {} has an unexpected size",
+            file.file_name
+        );
+    }
+    Ok(bytes::Bytes::from(bytes))
+}
+
 /// Shared files can be up to the version's size limit, so they are streamed to
 /// disk rather than held in memory.
 async fn install_shared_instance_file(
@@ -1161,10 +1165,47 @@ async fn install_shared_instance_file(
         return Ok(());
     }
 
-    let response = REQWEST_CLIENT.get(&file.url).send().await?;
+    let mut high_water = 0;
+    for allow_ranges in [true, false] {
+        let body = shared_file_body(file, allow_ranges).await?;
+        let segmented = body.is_segmented();
+        let mut current = 0_u64;
+        let mut stream_failed = false;
+        let reader = tokio_util::io::StreamReader::new(
+            controlled_shared_stream(body)
+                .map(|chunk| match chunk {
+                    Ok(chunk) => {
+                        current += chunk.len() as u64;
+                        downloaded.add(current.saturating_sub(high_water));
+                        high_water = high_water.max(current);
+                        Ok(chunk)
+                    }
+                    Err(error) => {
+                        stream_failed = true;
+                        Err(std::io::Error::other(error.to_string()))
+                    }
+                })
+                .boxed(),
+        );
+        let result = writer
+            .write_from_reader(state, &file.file_name, reader, file.file_size)
+            .await;
+        if !segmented || !stream_failed {
+            return result;
+        }
+    }
+    unreachable!()
+}
+
+async fn shared_file_body(
+    file: &SharedInstanceExternalFileData,
+    allow_ranges: bool,
+) -> crate::Result<DownloadBody> {
+    let request = || REQWEST_CLIENT.get(&file.url);
+    let response = download_step(request().send()).await??;
     if !response.status().is_success() {
         bail!(
-            "shared instance file download failed with status {}",
+            "shared instance download failed with status {}",
             response.status()
         );
     }
@@ -1178,17 +1219,22 @@ async fn install_shared_instance_file(
         );
     }
 
-    let reader = tokio_util::io::StreamReader::new(
-        response.bytes_stream().map(|chunk| {
-            let chunk = chunk
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
-            downloaded.add(chunk.len() as u64);
-            Ok::<_, std::io::Error>(chunk)
-        }),
-    );
-    writer
-        .write_from_reader(state, &file.file_name, reader, file.file_size)
-        .await
+    if allow_ranges {
+        download_step(download_body(request(), response)).await
+    } else {
+        Ok(DownloadBody::sequential(response))
+    }
+}
+
+fn controlled_shared_stream(
+    body: DownloadBody,
+) -> impl futures::Stream<Item = crate::Result<bytes::Bytes>> + Send {
+    futures::stream::try_unfold(body.stream, |mut stream| async move {
+        match download_step(stream.next()).await? {
+            Some(chunk) => Ok(Some((chunk?, stream))),
+            None => Ok(None),
+        }
+    })
 }
 
 /// Whether the instance already has this exact shared file, so the download

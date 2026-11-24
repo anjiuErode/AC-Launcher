@@ -67,6 +67,14 @@ pub async fn get() -> crate::Result<Settings> {
     let state = State::get().await?;
     let _guard = state.synced_options.lock().await;
     let mut settings = Settings::get(&state.pool).await?;
+    let file_manager_default_tab: Option<String> = sqlx::query_scalar(
+		"SELECT value FROM app_settings WHERE key = 'file_manager_default_tab'",
+	)
+	.fetch_optional(&state.pool)
+	.await?;
+	settings.file_manager_default_tab = crate::state::FileManagerDefaultTab::from_string(
+		file_manager_default_tab.as_deref().unwrap_or("all"),
+	);
     if crate::state::game_options_sync_is_enabled(&state.pool).await?
         && let Some(fullscreen) =
             crate::api::instance::shared_fullscreen_value(&state).await?
@@ -104,7 +112,15 @@ pub async fn set(settings: Settings) -> crate::Result<()> {
         } else {
             false
         };
-    settings.update(&state.pool).await?;
+    let mut transaction = state.pool.begin().await?;
+	settings.update(&mut *transaction).await?;
+	sqlx::query(
+		"INSERT INTO app_settings (key, value) VALUES ('file_manager_default_tab', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+	)
+	.bind(settings.file_manager_default_tab.as_str())
+	.execute(&mut *transaction)
+	.await?;
+	transaction.commit().await?;
 
     if shared_fullscreen_changed {
         let result =

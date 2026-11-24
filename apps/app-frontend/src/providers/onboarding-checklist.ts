@@ -1,16 +1,19 @@
 import { createContext } from '@modrinth/ui'
-import { computed, type ComputedRef, ref } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { computed, type ComputedRef, ref, watch } from 'vue'
 
 import { useAppEvent } from '@/composables/use-app-event'
+import { useGuildSession } from '@/composables/use-guild-session'
 import { getOnboardingChecklist, type OnboardingChecklist } from '@/helpers/onboarding-checklist'
 import type { AppEvents } from '@/providers/app-events'
 
 export interface OnboardingChecklistContext {
 	hasCreatedInstance: ComputedRef<boolean>
 	hasLoggedIntoMinecraft: ComputedRef<boolean>
-	hasLoggedIntoModrinth: ComputedRef<boolean>
+	hasLoggedIntoGuild: ComputedRef<boolean>
 	isReady: ComputedRef<boolean>
 	showChecklist: ComputedRef<boolean>
+	showModrinthFriends: ComputedRef<boolean>
 }
 
 export interface OnboardingChecklistProvider extends OnboardingChecklistContext {
@@ -24,13 +27,43 @@ export function setupOnboardingChecklistProvider(
 	appEvents: AppEvents,
 ): OnboardingChecklistProvider {
 	const checklist = ref<OnboardingChecklist>()
+	const { loading, signedIn } = useGuildSession()
+	const guildSessionReady = ref(false)
+	const guildSignInCompleted = useLocalStorage('acl:onboarding:guild-sign-in-completed', false)
+	watch(
+		loading,
+		(isLoading) => {
+			if (!isLoading) guildSessionReady.value = true
+		},
+		{ immediate: true },
+	)
+	watch(
+		signedIn,
+		(isSignedIn) => {
+			if (isSignedIn) guildSignInCompleted.value = true
+		},
+		{ immediate: true, flush: 'sync' },
+	)
+	const hasLoggedIntoGuild = computed(() => signedIn.value || guildSignInCompleted.value)
 
 	const context: OnboardingChecklistContext = {
 		hasCreatedInstance: computed(() => checklist.value?.has_created_instance ?? false),
 		hasLoggedIntoMinecraft: computed(() => checklist.value?.has_logged_into_minecraft ?? false),
-		hasLoggedIntoModrinth: computed(() => checklist.value?.has_logged_into_modrinth ?? false),
+		hasLoggedIntoGuild,
 		isReady: computed(() => checklist.value !== undefined),
-		showChecklist: computed(() => checklist.value?.show_checklist ?? false),
+		showChecklist: computed(() => {
+			const current = checklist.value
+			return (
+				guildSessionReady.value &&
+				!!current &&
+				(!current.has_created_instance ||
+					!current.has_logged_into_minecraft ||
+					!hasLoggedIntoGuild.value)
+			)
+		}),
+		showModrinthFriends: computed(
+			() => !checklist.value?.show_checklist || checklist.value.has_logged_into_modrinth,
+		),
 	}
 
 	provideOnboardingChecklist(context)

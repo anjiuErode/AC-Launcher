@@ -7,6 +7,19 @@ use crate::State;
 use crate::state::{Credentials, MinecraftLoginFlow};
 use crate::util::fetch::INSECURE_REQWEST_CLIENT;
 
+mod alternate_accounts;
+mod authlib_injector;
+mod external_account;
+mod external_secrets;
+pub use alternate_accounts::{OfflineAccount, add_offline_account, offline_accounts};
+pub(crate) use alternate_accounts::{active_alternate_id, offline_account};
+pub use external_account::{
+    ExternalAccount, ExternalAuthServer, ExternalLogin, begin_external_login,
+    choose_external_profile, discard_external_login, discover_external_server,
+    external_accounts,
+};
+pub(crate) use external_account::{external_launch_identity, external_logging_tokens};
+
 #[tracing::instrument]
 pub async fn check_reachable() -> crate::Result<()> {
     let resp = INSECURE_REQWEST_CLIENT
@@ -37,13 +50,7 @@ pub async fn finish_login(
     let credentials =
         crate::state::login_finish(code, flow, &state.pool).await?;
 
-    if let Err(error) =
-        crate::onboarding_checklist::mark_logged_into_minecraft().await
-    {
-        tracing::warn!(
-            "Failed to mark Minecraft login in onboarding checklist: {error}"
-        );
-    }
+    crate::onboarding_checklist::mark_logged_into_minecraft().await;
 
     Ok(credentials)
 }
@@ -51,6 +58,9 @@ pub async fn finish_login(
 #[tracing::instrument]
 pub async fn get_default_user() -> crate::Result<Option<uuid::Uuid>> {
     let state = State::get().await?;
+    if let Some(id) = active_alternate_id(&state.pool).await? {
+        return Ok(Some(id));
+    }
     let user = Credentials::get_default_credential(&state.pool).await?;
     Ok(user.map(|user| user.offline_profile.id))
 }
@@ -58,6 +68,14 @@ pub async fn get_default_user() -> crate::Result<Option<uuid::Uuid>> {
 #[tracing::instrument]
 pub async fn set_default_user(user: uuid::Uuid) -> crate::Result<()> {
     let state = State::get().await?;
+    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+    if alternate_accounts::select_offline_account(&mut transaction, user).await?
+        || external_account::select_external_account(&mut transaction, user).await?
+    {
+        transaction.commit().await?;
+        return Ok(());
+    }
+    transaction.rollback().await?;
     let users = Credentials::get_all(&state.pool).await?;
     let (_, mut user) = users
         .remove(&user)
@@ -65,6 +83,8 @@ pub async fn set_default_user(user: uuid::Uuid) -> crate::Result<()> {
 
     user.active = true;
     user.upsert(&state.pool).await?;
+    let mut conn = state.pool.acquire().await?;
+    alternate_accounts::clear_active(&mut conn).await?;
 
     Ok(())
 }
@@ -73,6 +93,15 @@ pub async fn set_default_user(user: uuid::Uuid) -> crate::Result<()> {
 #[tracing::instrument]
 pub async fn remove_user(uuid: uuid::Uuid) -> crate::Result<()> {
     let state = State::get().await?;
+
+    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+    if alternate_accounts::remove_offline_account(&mut transaction, uuid).await?
+        || external_account::remove_external_account(&mut transaction, uuid).await?
+    {
+        transaction.commit().await?;
+        return Ok(());
+    }
+    transaction.rollback().await?;
 
     let users = Credentials::get_all(&state.pool).await?;
 

@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { CheckIcon, RadioButtonIcon } from '@modrinth/assets'
+import { CheckIcon, LoaderSpinnerIcon, RadioButtonIcon } from '@modrinth/assets'
 import { Accordion, defineMessages, useVIntl } from '@modrinth/ui'
 import { computed, onUnmounted, ref } from 'vue'
 
+import { useGuildSession } from '@/composables/use-guild-session'
 import { injectOnboardingChecklist } from '@/providers/onboarding-checklist'
 
 const emit = defineEmits<{
 	'create-instance': []
 	'login-minecraft': []
-	'login-modrinth': []
+	'login-guild': []
 }>()
 
 const { formatMessage } = useVIntl()
 const {
 	hasCreatedInstance,
 	hasLoggedIntoMinecraft,
-	hasLoggedIntoModrinth,
+	hasLoggedIntoGuild,
 	isReady,
 	showChecklist,
 } = injectOnboardingChecklist()
+const { action, busy, loading } = useGuildSession()
 const collapsedCornersVisible = ref(false)
 let collapseTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -35,9 +37,9 @@ const messages = defineMessages({
 		id: 'onboarding-checklist.login-minecraft',
 		defaultMessage: 'Sign in to Minecraft',
 	},
-	loginModrinth: {
-		id: 'onboarding-checklist.login-modrinth',
-		defaultMessage: 'Sign in to Modrinth',
+	loginGuild: {
+		id: 'onboarding-checklist.login-guild',
+		defaultMessage: 'Sign in to a guild account',
 	},
 })
 
@@ -55,10 +57,12 @@ const steps = computed(() => [
 		action: () => emit('login-minecraft'),
 	},
 	{
-		id: 'login-modrinth',
-		label: formatMessage(messages.loginModrinth),
-		complete: hasLoggedIntoModrinth.value,
-		action: () => emit('login-modrinth'),
+		id: 'login-guild',
+		label: formatMessage(messages.loginGuild),
+		complete: hasLoggedIntoGuild.value,
+		disabled: busy.value || loading.value,
+		busy: action.value === 'signing-in',
+		action: () => emit('login-guild'),
 	},
 ])
 
@@ -106,9 +110,12 @@ onUnmounted(() => clearTimeout(collapseTimer))
 				:class="
 					step.complete
 						? '!cursor-default opacity-50'
-						: 'cursor-pointer hover:brightness-110 active:brightness-90'
+						: step.disabled
+							? 'cursor-wait'
+							: 'cursor-pointer hover:brightness-110 active:brightness-90'
 				"
-				:disabled="step.complete"
+				:disabled="step.complete || step.disabled"
+				:aria-busy="step.busy || undefined"
 				@click="step.action"
 			>
 				<span
@@ -117,6 +124,11 @@ onUnmounted(() => clearTimeout(collapseTimer))
 				>
 					<CheckIcon class="size-3 invert [stroke-width:3] top-px" />
 				</span>
+				<LoaderSpinnerIcon
+					v-else-if="step.busy"
+					class="size-5 shrink-0 motion-safe:animate-spin"
+					aria-hidden="true"
+				/>
 				<RadioButtonIcon v-else class="size-5 shrink-0" />
 				<span
 					class="min-w-0 truncate font-medium leading-5"

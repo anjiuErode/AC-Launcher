@@ -717,7 +717,7 @@ pub(crate) async fn upsert_instance_file(
     row.try_into()
 }
 
-async fn insert_content_entry(
+pub(crate) async fn insert_content_entry(
     entry: &ContentEntry,
     tx: &mut Transaction<'_, Sqlite>,
 ) -> crate::Result<()> {
@@ -778,6 +778,7 @@ pub(crate) async fn restore_instance_content_snapshot(
     instance_id: &str,
     files: &[InstanceFile],
     entries: &[ContentEntry],
+    locked_file_ids: &HashSet<String>,
     pool: &SqlitePool,
 ) -> crate::Result<()> {
     let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
@@ -802,12 +803,26 @@ pub(crate) async fn restore_instance_content_snapshot(
 
     for file in files {
         upsert_instance_file(file, &mut tx).await?;
+        if locked_file_ids.contains(&file.id) {
+            insert_instance_file_lock(&file.id, &mut tx).await?;
+        }
     }
     for entry in entries {
         insert_content_entry(entry, &mut tx).await?;
     }
 
     tx.commit().await?;
+    Ok(())
+}
+
+pub(crate) async fn insert_instance_file_lock(
+    file_id: &str,
+    tx: &mut Transaction<'_, Sqlite>,
+) -> crate::Result<()> {
+    sqlx::query("INSERT INTO instance_content_locks (file_id) VALUES (?)")
+        .bind(file_id)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 

@@ -8,15 +8,30 @@ use crate::state::{
 #[tracing::instrument]
 pub async fn get() -> crate::Result<OnboardingChecklist> {
     let state = State::get().await?;
-    get_onboarding_checklist(&state.pool).await
+    let checklist = get_onboarding_checklist(&state.pool).await?;
+    if !checklist.has_logged_into_minecraft
+        && matches!(
+            crate::minecraft_auth::active_alternate_id(&state.pool).await,
+            Ok(Some(_))
+        )
+    {
+        mark_logged_into_minecraft().await;
+        return get_onboarding_checklist(&state.pool).await;
+    }
+
+    Ok(checklist)
 }
 
 pub(crate) async fn mark_created_instance() -> crate::Result<()> {
     mark(OnboardingChecklistItem::CreatedInstance).await
 }
 
-pub(crate) async fn mark_logged_into_minecraft() -> crate::Result<()> {
-    mark(OnboardingChecklistItem::LoggedIntoMinecraft).await
+pub(crate) async fn mark_logged_into_minecraft() {
+    if let Err(error) = mark(OnboardingChecklistItem::LoggedIntoMinecraft).await {
+        tracing::warn!(
+            "Failed to mark Minecraft login in onboarding checklist: {error}"
+        );
+    }
 }
 
 pub(crate) async fn mark_logged_into_modrinth() -> crate::Result<()> {

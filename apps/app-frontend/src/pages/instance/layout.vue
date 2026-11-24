@@ -56,6 +56,10 @@
 		</div>
 		<div :class="['px-6', { 'shrink-0': isFixedRender }]">
 			<NavTabs :links="tabs" />
+			<LaunchDiagnostic
+				:launch-failure-count="launchFailureCount"
+				@open-java="settingsModal?.showJava()"
+			/>
 			<InstanceAdmonitions
 				class="mt-4"
 				:instance="instance"
@@ -148,6 +152,7 @@ import {
 	run,
 	sync_content_files,
 } from '@/helpers/instance'
+import { get_launch_diagnostic } from '@/helpers/logs'
 import { useSharedInstanceErrors } from '@/helpers/shared-instance-errors'
 import type { GameInstance } from '@/helpers/types'
 import { createInstanceShortcut, showInstanceInFolder } from '@/helpers/utils.js'
@@ -157,6 +162,7 @@ import { injectServerInstall } from '@/providers/server-install'
 import { useRootBreadcrumb } from '@/shared/breadcrumbs'
 
 import InstanceAdmonitions from './components/admonitions/index.vue'
+import LaunchDiagnostic from './components/launch-diagnostic.vue'
 import InstancePageHeader from './components/page-header/index.vue'
 import { provideInstancePage } from './instance-context'
 import {
@@ -574,6 +580,7 @@ watch(
 )
 
 const options = ref<InstanceType<typeof ContextMenu> | null>(null)
+const launchFailureCount = ref(0)
 
 const launchInstance = async (context: string) => {
 	if (!instance.value || instance.value.quarantined) return
@@ -583,7 +590,11 @@ const launchInstance = async (context: string) => {
 		await run(currentInstance.id)
 		queryClient.setQueryData(instanceKeys.processes(currentInstance.id), [true])
 	} catch (err) {
-		handleSevereError(err, { instanceId: currentInstance.id })
+		launchFailureCount.value++
+		const diagnostic = await get_launch_diagnostic(currentInstance.id).catch(() => null)
+		if (diagnostic?.exit_code !== null || instance.value?.id !== currentInstance.id) {
+			handleSevereError(err, { instanceId: currentInstance.id })
+		}
 	}
 	loading.value = false
 

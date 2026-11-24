@@ -13986,6 +13986,7 @@ dependencies = [
  "infer 0.22.0",
  "itertools 0.14.0",
  "json5",
+ "md-5 0.10.6",
  "minecraft-meta-manifest",
  "modrinth-content-management",
  "notify",
@@ -14049,10 +14050,12 @@ dependencies = [
  "dashmap",
  "either",
  "enumset",
+ "futures-util",
  "hkdf",
  "hyper 1.12.0",
  "hyper-util",
  "image",
+ "minisign-verify",
  "native-dialog",
  "p256",
  "paste",
@@ -14082,6 +14085,7 @@ dependencies = [
  "urlencoding",
  "uuid 1.23.3",
  "windows",
+ "windows-core 0.61.2",
  "zip 6.0.0",
 ]
 

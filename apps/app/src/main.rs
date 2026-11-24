@@ -15,6 +15,9 @@ use theseus::prelude::*;
 mod api;
 mod guild;
 
+#[cfg(windows)]
+mod auth_card_drop;
+
 #[cfg(target_os = "macos")]
 mod macos;
 
@@ -204,43 +207,95 @@ fn app_config_dir_for(identifier: &str) -> Option<std::path::PathBuf> {
     base.map(|dir| dir.join(identifier))
 }
 
-fn read_proxy_config(identifier: &str) -> theseus::ProxyConfig {
-    app_config_dir_for(identifier)
-        .map(|dir| dir.join("proxy.json"))
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+const DIRECT_PROXY_CONFIG: theseus::ProxyConfig = theseus::ProxyConfig {
+    mode: theseus::ProxyMode::Off,
+    url: None,
+};
+
+struct ActiveProxyConfig(theseus::ProxyConfig);
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ProxySettingsError {
+    InvalidAddress,
+    LoadFailed,
+    SaveFailed,
+    TestFailed,
+}
+
+#[derive(serde::Serialize)]
+struct ProxySettingsSnapshot {
+    saved: theseus::ProxyConfig,
+    active_mode: theseus::ProxyMode,
+    saved_valid: bool,
+    pending_restart: bool,
+}
+
+impl ProxySettingsSnapshot {
+    fn new(saved: theseus::ProxyConfig, active: &ActiveProxyConfig) -> Self {
+        let normalized = saved.clone().normalized();
+        let saved_valid = normalized.is_some();
+        let pending_restart = normalized
+            .as_ref()
+            .is_some_and(|config| !active.0.same_route(config));
+        Self {
+            saved: normalized.unwrap_or(saved),
+            active_mode: active.0.mode,
+            saved_valid,
+            pending_restart,
+        }
+    }
+}
+
+fn read_proxy_config(identifier: &str) -> Result<theseus::ProxyConfig, ProxySettingsError> {
+    let dir = app_config_dir_for(identifier).ok_or(ProxySettingsError::LoadFailed)?;
+    match std::fs::read_to_string(dir.join("proxy.json")) {
+        Ok(raw) => serde_json::from_str(&raw).map_err(|_| ProxySettingsError::LoadFailed),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(theseus::ProxyConfig::default())
+        }
+        Err(_) => Err(ProxySettingsError::LoadFailed),
+    }
 }
 
 fn write_proxy_config(
     identifier: &str,
     config: &theseus::ProxyConfig,
-) -> Result<(), String> {
-    let dir = app_config_dir_for(identifier)
-        .ok_or_else(|| "无法定位应用配置目录".to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let raw = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("proxy.json"), raw).map_err(|e| e.to_string())
+) -> Result<(), ProxySettingsError> {
+    let write = || -> anyhow::Result<()> {
+        let dir = app_config_dir_for(identifier)
+            .context("missing application configuration directory")?;
+        std::fs::create_dir_all(&dir)?;
+        let mut temp = tempfile::NamedTempFile::new_in(&dir)?;
+        serde_json::to_writer_pretty(temp.as_file_mut(), config)?;
+        temp.as_file().sync_all()?;
+        temp.persist(dir.join("proxy.json"))?;
+        Ok(())
+    };
+    write().map_err(|_| ProxySettingsError::SaveFailed)
 }
 
 #[tauri::command]
-fn get_proxy_config(app: tauri::AppHandle) -> theseus::ProxyConfig {
-    read_proxy_config(&app.config().identifier)
+fn get_proxy_config(
+    app: tauri::AppHandle,
+    active: tauri::State<'_, ActiveProxyConfig>,
+) -> Result<ProxySettingsSnapshot, ProxySettingsError> {
+    let saved = read_proxy_config(&app.config().identifier)?;
+    Ok(ProxySettingsSnapshot::new(saved, active.inner()))
 }
 
 #[tauri::command]
 fn set_proxy_config(
     app: tauri::AppHandle,
-    mode: String,
+    active: tauri::State<'_, ActiveProxyConfig>,
+    mode: theseus::ProxyMode,
     url: Option<String>,
-) -> Result<(), String> {
-    let mode: theseus::ProxyMode =
-        serde_json::from_str(&format!("\"{mode}\""))
-            .map_err(|_| format!("未知的代理模式: {mode}"))?;
-    let config = theseus::ProxyConfig { mode, url };
+) -> Result<ProxySettingsSnapshot, ProxySettingsError> {
+    let config = theseus::ProxyConfig { mode, url }
+        .normalized()
+        .ok_or(ProxySettingsError::InvalidAddress)?;
     write_proxy_config(&app.config().identifier, &config)?;
-    theseus::set_http_proxy_config(config);
-    Ok(())
+    Ok(ProxySettingsSnapshot::new(config, active.inner()))
 }
 
 /// 打开官网授权页，等待本机回环回调完成登录
@@ -250,7 +305,7 @@ async fn guild_begin_login(app: tauri::AppHandle) -> Result<guild::PublicSession
 }
 
 #[tauri::command]
-fn guild_session(app: tauri::AppHandle) -> Option<guild::PublicSession> {
+fn guild_session(app: tauri::AppHandle) -> Result<Option<guild::PublicSession>, String> {
     guild::current(&app.config().identifier)
 }
 
@@ -393,14 +448,17 @@ struct NetProbe {
 
 /// 用给定的（尚未保存的）代理配置试连，用于设置页的「测试连接」
 #[tauri::command]
-async fn test_network(mode: String, url: Option<String>) -> Result<Vec<NetProbe>, String> {
-    let mode: theseus::ProxyMode =
-        serde_json::from_str(&format!("\"{mode}\""))
-            .map_err(|_| format!("未知的代理模式: {mode}"))?;
-    let config = theseus::ProxyConfig { mode, url };
+async fn test_network(
+    mode: theseus::ProxyMode,
+    url: Option<String>,
+) -> Result<Vec<NetProbe>, ProxySettingsError> {
+    let config = theseus::ProxyConfig { mode, url }
+        .normalized()
+        .ok_or(ProxySettingsError::InvalidAddress)?;
     let client = theseus::client_builder_with(&config)
+        .timeout(std::time::Duration::from_secs(12))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| ProxySettingsError::TestFailed)?;
 
     let targets = [
         ("Modrinth API", "https://api.modrinth.com/"),
@@ -428,7 +486,9 @@ async fn test_network(mode: String, url: Option<String>) -> Result<Vec<NetProbe>
                 ok: false,
                 status: None,
                 millis: started.elapsed().as_millis() as u64,
-                error: Some(err.to_string()),
+                error: Some(
+                    if err.is_timeout() { "timeout" } else { "request_failed" }.to_string(),
+                ),
             }),
         }
     }
@@ -473,11 +533,14 @@ fn main() {
     tracing::info!("Initialized tracing subscriber. Loading Modrinth App!");
 
     // 代理配置必须在任何 HTTP 客户端首次构建前注入
-    let proxy_config = read_proxy_config(&tauri_context.config().identifier);
-    tracing::info!("Loaded network proxy preference: {:?}", proxy_config);
-    theseus::set_http_proxy_config(proxy_config);
+    let proxy_config = read_proxy_config(&tauri_context.config().identifier)
+        .unwrap_or_default()
+        .normalized()
+        .unwrap_or(DIRECT_PROXY_CONFIG);
+    tracing::info!("Loaded network proxy mode: {:?}", proxy_config.mode);
+    theseus::set_http_proxy_config(proxy_config.clone());
 
-    let mut builder = tauri::Builder::default();
+    let mut builder = tauri::Builder::default().manage(ActiveProxyConfig(proxy_config));
 
     #[cfg(target_os = "macos")]
     {
@@ -607,6 +670,9 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
+            #[cfg(windows)]
+            auth_card_drop::install(app.handle());
+
             #[cfg(target_os = "macos")]
             {
                 let payload = macos::deep_link::get_or_init_payload(app);
@@ -699,7 +765,7 @@ fn main() {
                     loop {
                         ticker.tick().await;
                         let identifier = handle.config().identifier.clone();
-                        if guild::current(&identifier).is_none() {
+                        if !matches!(guild::current(&identifier), Ok(Some(_))) {
                             continue;
                         }
                         // 401 已在内部清会话；其余错误（断网、429）静默，

@@ -27,7 +27,11 @@ use crate::{
 
 pub mod atlauncher;
 pub mod curseforge;
+pub mod curseforge_archive;
+pub mod curseforge_content;
+pub mod external;
 pub mod gdlauncher;
+pub mod launcher_directory;
 pub mod mmc;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

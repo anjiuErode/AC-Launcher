@@ -83,6 +83,16 @@ pub async fn get_content_items(
 }
 
 #[tracing::instrument]
+pub async fn get_file_manager_content(
+    instance_id: &str,
+) -> crate::Result<Vec<ContentItem>> {
+    let state = State::get().await?;
+    let mut items = crate::state::list_file_manager_content(instance_id, &state).await?;
+    super::synced_packs::decorate_content(instance_id, &mut items, &state).await?;
+    Ok(items)
+}
+
+#[tracing::instrument]
 pub async fn refresh_content_updates(instance_id: &str) -> crate::Result<()> {
     let state = State::get().await?;
     crate::state::refresh_content_updates(instance_id, &state).await

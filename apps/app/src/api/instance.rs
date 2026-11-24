@@ -23,6 +23,8 @@ use theseus::prelude::*;
 use theseus::server_address::ServerAddress;
 use theseus::{DownloadReason, ErrorKind};
 
+mod optifine;
+
 pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("instance")
         .invoke_handler(tauri::generate_handler![
@@ -41,6 +43,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             instance_get_install_candidates,
             instance_content,
             instance_get_content_items,
+            instance_get_file_manager_content,
             instance_sync_content_files,
             instance_refresh_content_updates,
             instance_get_dependencies_as_content_items,
@@ -48,6 +51,12 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             instance_get_linked_modpack_content,
             instance_get_optimal_jre_key,
             instance_get_full_path,
+            instance_export_archive,
+            instance_restore_archive,
+            instance_preview_version_switch,
+            instance_switch_version,
+            optifine::instance_optifine_status,
+            optifine::instance_install_optifine,
             instance_get_mod_full_path,
             instance_list_screenshots,
             instance_list_all_screenshots,
@@ -634,6 +643,13 @@ pub async fn instance_get_content_items(
 }
 
 #[tauri::command]
+pub async fn instance_get_file_manager_content(
+    instance_id: &str,
+) -> Result<Vec<ContentItem>> {
+    Ok(theseus::instance::get_file_manager_content(instance_id).await?)
+}
+
+#[tauri::command]
 pub async fn instance_sync_content_files(instance_id: &str) -> Result<()> {
     theseus::instance::sync_content_files(instance_id).await?;
     Ok(())
@@ -685,6 +701,42 @@ pub async fn instance_get_linked_modpack_content(
 #[tauri::command]
 pub async fn instance_get_full_path(instance_id: &str) -> Result<PathBuf> {
     Ok(theseus::instance::get_full_path(instance_id).await?)
+}
+
+#[tauri::command]
+pub async fn instance_export_archive(instance_id: &str, output: PathBuf) -> Result<()> {
+    Ok(theseus::instance::export_instance_archive(instance_id, &output).await?)
+}
+
+#[tauri::command]
+pub async fn instance_restore_archive(archive: PathBuf) -> Result<String> {
+    Ok(theseus::instance::restore_instance_archive(&archive).await?)
+}
+
+#[tauri::command]
+pub async fn instance_preview_version_switch(
+    instance_id: &str,
+    game_version: &str,
+    loader: ModLoader,
+) -> Result<Vec<theseus::instance::VersionSwitchContent>> {
+    Ok(theseus::instance::preview_instance_version_switch(instance_id, game_version, loader).await?)
+}
+
+#[tauri::command]
+pub async fn instance_switch_version(
+    instance_id: String,
+    game_version: String,
+    loader: ModLoader,
+    loader_version: Option<String>,
+    disable_mods: Vec<String>,
+) -> Result<theseus::install::InstallJobSnapshot> {
+    Ok(theseus::instance::switch_instance_version(
+        instance_id,
+        game_version,
+        loader,
+        loader_version,
+        disable_mods,
+    ).await?)
 }
 
 #[tauri::command]

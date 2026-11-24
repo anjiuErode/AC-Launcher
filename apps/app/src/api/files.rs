@@ -1,9 +1,10 @@
 use crate::api::Result;
 use anyhow::{Context, anyhow};
 use async_zip::base::read::seek::ZipFileReader;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{Cursor, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,13 +12,21 @@ use tauri::{Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_http::reqwest;
 use theseus::ErrorKind;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
+
+mod external_downloads;
+use external_downloads::ExternalDownloads;
 
 pub fn init<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("files")
         .setup(|app, _| {
             app.manage(ExternalSaveSessions::default());
+            let settings = theseus::data::DirectoryInfo::initial_settings_dir_path(
+                &app.config().identifier,
+            )
+            .context("missing launcher settings directory")?;
+            app.manage(ExternalDownloads::new(settings.join("external-downloads")));
             Ok(())
         })
         .on_event(|app, event| {
@@ -43,6 +52,10 @@ pub fn init<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
             files_select_external,
             files_save_external,
             files_release_external,
+            external_downloads::files_create_url_download,
+            external_downloads::files_list_url_downloads,
+            external_downloads::files_start_url_download,
+            external_downloads::files_control_url_download,
             file_read_dragged_file,
             file_list,
             file_read,
@@ -50,6 +63,9 @@ pub fn init<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
             file_create_directory,
             file_rename,
             file_delete,
+            schematic_list,
+            schematic_details,
+            schematic_delete,
         ])
         .build()
 }
@@ -156,6 +172,21 @@ pub async fn file_list(
     path: &str,
 ) -> Result<Vec<theseus::instance::InstanceFileItem>> {
     Ok(theseus::instance::list_instance_files(instance_id, path).await?)
+}
+
+#[tauri::command]
+pub async fn schematic_list(instance_id: String) -> Result<Vec<theseus::instance::SchematicFile>> {
+	Ok(theseus::instance::list_schematics(&instance_id).await?)
+}
+
+#[tauri::command]
+pub async fn schematic_details(instance_id: String, path: String) -> Result<theseus::instance::SchematicDetails> {
+	Ok(theseus::instance::get_schematic_details(&instance_id, &path).await?)
+}
+
+#[tauri::command]
+pub async fn schematic_delete(instance_id: String, path: String) -> Result<()> {
+	Ok(theseus::instance::delete_schematic(&instance_id, &path).await?)
 }
 
 #[tauri::command]
@@ -281,7 +312,7 @@ pub struct ExternalSaveProgress {
     total_bytes: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalSaveError {
     message: String,
@@ -305,9 +336,18 @@ impl From<std::io::Error> for ExternalSaveError {
 
 impl From<reqwest::Error> for ExternalSaveError {
     fn from(error: reqwest::Error) -> Self {
+        let message = if error.is_timeout() {
+            "Download request timed out".to_string()
+        } else if let Some(status) = error.status() {
+            format!("Download request failed with HTTP {status}")
+        } else if error.is_builder() {
+            "Invalid download request".to_string()
+        } else {
+            "Download request failed".to_string()
+        };
         Self {
             status_code: error.status().map(|status| status.as_u16()),
-            message: error.without_url().to_string(),
+            message,
         }
     }
 }
@@ -332,6 +372,27 @@ pub async fn files_select_external<R: Runtime>(
     filename: String,
     filter: Option<ExternalSaveFilter>,
 ) -> std::result::Result<Option<String>, ExternalSaveError> {
+    let Some(path) = select_external_destination(&window, &filename, filter).await? else {
+        return Ok(None);
+    };
+    let save_id = uuid::Uuid::new_v4().to_string();
+    state.0.insert(
+        save_id.clone(),
+        Arc::new(ExternalSaveSession {
+            window_label: window.label().to_string(),
+            path,
+            lock: tokio::sync::Mutex::new(()),
+            cancel: CancellationToken::new(),
+        }),
+    );
+    Ok(Some(save_id))
+}
+
+async fn select_external_destination<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    filename: &str,
+    filter: Option<ExternalSaveFilter>,
+) -> std::result::Result<Option<PathBuf>, ExternalSaveError> {
     let file_name = filename
         .rsplit(['/', '\\'])
         .next()
@@ -350,19 +411,9 @@ pub async fn files_select_external<R: Runtime>(
     let Some(destination) = rx.await.unwrap_or(None) else {
         return Ok(None);
     };
-    let path = PathBuf::try_from(destination)
-        .map_err(|error| ExternalSaveError::new(error.to_string()))?;
-    let save_id = uuid::Uuid::new_v4().to_string();
-    state.0.insert(
-        save_id.clone(),
-        Arc::new(ExternalSaveSession {
-            window_label: window.label().to_string(),
-            path,
-            lock: tokio::sync::Mutex::new(()),
-            cancel: CancellationToken::new(),
-        }),
-    );
-    Ok(Some(save_id))
+    PathBuf::try_from(destination)
+        .map(Some)
+        .map_err(|error| ExternalSaveError::new(error.to_string()))
 }
 
 #[tauri::command]
@@ -380,6 +431,7 @@ pub async fn files_save_external<R: Runtime>(
         return Err(ExternalSaveError::new("Unsupported download URL"));
     }
     tokio::select! {
+        biased;
         _ = session.cancel.cancelled() => Err(ExternalSaveError::new("Download cancelled")),
         result = async {
             let _lock = session.lock.lock().await;
@@ -388,7 +440,7 @@ pub async fn files_save_external<R: Runtime>(
                 downloaded_bytes: 0,
                 total_bytes: None,
             });
-            let client = reqwest::Client::builder()
+            let client = theseus::client_builder_with(&theseus::http_proxy_config())
                 .connect_timeout(Duration::from_secs(30))
                 .read_timeout(Duration::from_secs(60))
                 .build()?;
@@ -396,14 +448,24 @@ pub async fn files_save_external<R: Runtime>(
             for (name, value) in request.headers {
                 download = download.header(name, value);
             }
-            let mut response = download.send().await?.error_for_status()?;
-            let total_bytes = response.content_length();
+            let clone_request = || {
+                download.try_clone().ok_or_else(|| {
+                    ExternalSaveError::new("Invalid download request")
+                })
+            };
+            let receive = async || {
+                let response = clone_request()?.send().await?.error_for_status()?;
+                Ok::<_, ExternalSaveError>(response)
+            };
+            let response = receive().await?;
+            let mut body = theseus::download_body(clone_request()?, response).await;
             let mut downloaded_bytes = 0;
+            let mut reported_bytes = 0;
             let mut last_progress = Instant::now();
             let _ = on_progress.send(ExternalSaveProgress {
                 stage: "downloading",
                 downloaded_bytes,
-                total_bytes,
+                total_bytes: body.total,
             });
             let parent = session.path.parent().ok_or_else(|| {
                 ExternalSaveError::new("Invalid save destination")
@@ -411,22 +473,37 @@ pub async fn files_save_external<R: Runtime>(
             let temporary = tempfile::NamedTempFile::new_in(parent)?;
             let (file, temporary_path) = temporary.into_parts();
             let mut file = tokio::fs::File::from_std(file);
-            while let Some(chunk) = response.chunk().await? {
+            while let Some(chunk) = body.stream.next().await {
+                let chunk = match chunk {
+                    Ok(chunk) => chunk,
+                    Err(_) if body.is_segmented() => {
+                        drop(body);
+                        body = theseus::DownloadBody::sequential(receive().await?);
+                        file.set_len(0).await?;
+                        file.seek(SeekFrom::Start(0)).await?;
+                        downloaded_bytes = 0;
+                        continue;
+                    }
+                    Err(_) => return Err(ExternalSaveError::new("Download interrupted")),
+                };
                 file.write_all(&chunk).await?;
                 downloaded_bytes += chunk.len() as u64;
-                if last_progress.elapsed() >= Duration::from_millis(200) {
+                if downloaded_bytes >= reported_bytes
+                    && last_progress.elapsed() >= Duration::from_millis(200)
+                {
                     let _ = on_progress.send(ExternalSaveProgress {
                         stage: "downloading",
                         downloaded_bytes,
-                        total_bytes,
+                        total_bytes: body.total,
                     });
+                    reported_bytes = downloaded_bytes;
                     last_progress = Instant::now();
                 }
             }
             let _ = on_progress.send(ExternalSaveProgress {
                 stage: "saving",
                 downloaded_bytes,
-                total_bytes,
+                total_bytes: body.total,
             });
             file.flush().await?;
             file.sync_all().await?;

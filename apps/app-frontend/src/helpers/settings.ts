@@ -40,6 +40,7 @@ export type AppSettings = {
 	theme: ColorTheme
 	locale: string
 	default_page: 'Home' | 'Library'
+	file_manager_default_tab: 'all' | 'mods' | 'resourcepacks' | 'shaderpacks' | 'schematics'
 	collapsed_navigation: boolean
 	hide_nametag_skins_page: boolean
 	advanced_rendering: boolean

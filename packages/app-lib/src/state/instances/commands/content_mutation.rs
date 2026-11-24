@@ -847,6 +847,48 @@ pub(crate) async fn install_stored_file(
     }
 }
 
+pub(crate) async fn install_stored_file_if_absent(
+    instance_id: &str,
+    request: InstallContent<'_>,
+    state: &State,
+) -> crate::Result<()> {
+    install_stored_file_if_absent_after(instance_id, request, state, std::future::ready(Ok(()))).await
+}
+
+pub(crate) async fn install_stored_file_if_absent_after(
+    instance_id: &str,
+    request: InstallContent<'_>,
+    state: &State,
+    validate: impl Future<Output = crate::Result<()>>,
+) -> crate::Result<()> {
+    let instance_content = InstanceContent::lock(instance_id, state).await?;
+    let relative_path = canonical_content_path(request.requested_path);
+    if content_rows::get_instance_file_by_relative_path(
+        instance_id,
+        relative_path,
+        &state.pool,
+    )
+    .await?
+    .is_some()
+    {
+        bail!(ErrorKind::InputError("the mod already has a registered filename".into()));
+    }
+    for path in [relative_path.to_owned(), format!("{relative_path}.disabled")] {
+        let destination = state
+            .content_store
+            .instance_path(&instance_content.instance.path, &path)
+            .await?;
+        match fs::symlink_metadata(destination).await {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+            Ok(_) => bail!(ErrorKind::InputError("the mod filename already exists".into())),
+        }
+    }
+    validate.await?;
+    instance_content.apply_change(ContentChange::Install(request)).await?;
+    Ok(())
+}
+
 pub(crate) async fn toggle_disable_project(
     instance_id: &str,
     project_path: &str,

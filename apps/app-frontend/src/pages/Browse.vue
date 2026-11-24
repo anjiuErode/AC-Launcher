@@ -13,6 +13,7 @@ import type { BrowseInstallContentType, CardAction, ProjectType, Tags } from '@m
 import {
 	BrowsePageLayout,
 	BrowseSidebar,
+	ButtonLink,
 	commonMessages,
 	ContextMenu,
 	CreationFlowModal,
@@ -1331,6 +1332,13 @@ provideBrowseManager({
 
 <template>
 	<div class="flex flex-col gap-2 p-6">
+		<ButtonLink
+			v-if="['modpack', 'mod', 'resourcepack', 'shader', 'datapack'].includes(projectType) && !isServerContext"
+			:to="{ name: 'CurseForge import', query: { category: projectType, target: initialInstanceId || undefined } }"
+			class="w-fit"
+		>
+			CurseForge
+		</ButtonLink>
 		<BrowsePageLayout>
 			<template #after>
 				<ContextMenu ref="contextMenuRef" :label="formatMessage(messages.projectActionsLabel)">

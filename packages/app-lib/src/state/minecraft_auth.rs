@@ -538,6 +538,9 @@ impl Credentials {
     pub async fn get_default_credential(
         exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite> + Copy,
     ) -> crate::Result<Option<Credentials>> {
+        if crate::minecraft_auth::active_alternate_id(exec).await?.is_some() {
+            return Ok(None);
+        }
         let credentials = Self::get_active(exec).await?;
 
         if let Some(mut creds) = credentials {

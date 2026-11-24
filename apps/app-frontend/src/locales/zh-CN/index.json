@@ -1,4 +1,271 @@
 {
+	"app.accounts.external.add": {
+		"message": "添加外置登录"
+	},
+	"app.accounts.external.address": {
+		"message": "HTTPS 认证服务器"
+	},
+	"app.accounts.external.destination": {
+		"message": "账号和密码将发送到此服务器"
+	},
+	"app.accounts.external.username": {
+		"message": "外置账号"
+	},
+	"app.accounts.external.password": {
+		"message": "外置账号密码"
+	},
+	"app.accounts.external.login": {
+		"message": "登录此服务器"
+	},
+	"app.accounts.external.profile": {
+		"message": "选择 Minecraft 角色"
+	},
+	"app.accounts.external.discovery-failed": {
+		"message": "无法验证该 HTTPS 认证服务器。"
+	},
+	"app.accounts.external.login-failed": {
+		"message": "登录失败。请检查账号、密码和认证服务器。"
+	},
+	"app.accounts.external.profile-failed": {
+		"message": "无法启用此角色。请重新登录并选择角色。"
+	},
+	"app.instance.version-switch.save-backup": {
+		"message": "保存切换前的实例备份"
+	},
+	"app.instance.version-switch.restore-backup": {
+		"message": "可以在实例库将该 ZIP 恢复为独立实例。"
+	},
+	"app.instance.version-switch.backup-saved": {
+		"message": "已保存切换前的备份"
+	},
+	"app.external-import.launcher-title": {
+		"message": "从 PCL2、PCL-CE 或 HMCL 导入"
+	},
+	"app.external-import.curseforge-title": {
+		"message": "CurseForge 内容"
+	},
+	"app.external-import.search-content": {
+		"message": "搜索 CurseForge"
+	},
+	"app.external-import.category": {
+		"message": "内容类型"
+	},
+	"app.external-import.no-content": {
+		"message": "没有找到项目。"
+	},
+	"app.external-import.manual-content": {
+		"message": "在 CurseForge 查看文件"
+	},
+	"app.external-import.select-target": {
+		"message": "选择兼容实例"
+	},
+	"app.external-import.no-targets": {
+		"message": "没有可用的兼容实例。请确保实例已安装且未受管，游戏运行时请先退出 Minecraft。"
+	},
+	"app.external-import.required-projects": {
+		"message": "本版本需要 CurseForge 项目 {ids}。ACL 无法验证这些必需依赖，暂不能安装。"
+	},
+	"app.external-import.required-project-list": {
+		"message": "必需的 CurseForge 项目 {ids}。请选择实例以核对依赖。"
+	},
+	"app.external-import.satisfied-projects": {
+		"message": "已在所选实例中验证依赖 {ids}。"
+	},
+	"app.external-import.conflicting-projects": {
+		"message": "ACL 无法核对与 CurseForge 项目 {ids} 的冲突，暂不能安装。"
+	},
+	"app.external-import.choose-world": {
+		"message": "选择本地世界"
+	},
+	"app.external-import.no-world": {
+		"message": "此实例没有可用的单人世界。"
+	},
+	"app.external-import.install-content": {
+		"message": "安装内容"
+	},
+	"app.external-import.content-installed": {
+		"message": "已安装到 {path}"
+	},
+	"app.external-import.launcher-description": {
+		"message": "选择启动器目录、.minecraft 目录或版本目录。ACL 会把选中的游戏数据复制到新实例。"
+	},
+	"app.external-import.launcher": {
+		"message": "来源启动器"
+	},
+	"app.external-import.choose-directory": {
+		"message": "选择目录"
+	},
+	"app.external-import.version": {
+		"message": "Minecraft 版本"
+	},
+	"app.external-import.select-version": {
+		"message": "选择版本"
+	},
+	"app.external-import.layout": {
+		"message": "游戏数据目录"
+	},
+	"app.external-import.select-layout": {
+		"message": "选择启动器实际使用的目录布局"
+	},
+	"app.external-import.shared": {
+		"message": "共享 .minecraft 目录"
+	},
+	"app.external-import.isolated": {
+		"message": "独立版本目录"
+	},
+	"app.external-import.layout-hint": {
+		"message": "请确认该版本的存档和模组实际存放的位置。部分启动器会使用全局隔离设置。"
+	},
+	"app.external-import.source-summary": {
+		"message": "{saves} 个存档 · {mods} 个模组文件 · {config} 个配置文件"
+	},
+	"app.external-import.missing": {
+		"message": "该目录缺少 {paths}"
+	},
+	"app.external-import.unsupported-version": {
+		"message": "暂不支持"
+	},
+	"app.external-import.version-summary": {
+		"message": "Minecraft {version} · {loader}"
+	},
+	"app.external-import.archive": {
+		"message": "导入 CurseForge ZIP"
+	},
+	"app.external-import.choose-archive": {
+		"message": "选择 ZIP"
+	},
+	"app.external-import.browse": {
+		"message": "在线浏览"
+	},
+	"app.external-import.api-unavailable": {
+		"message": "在线浏览需在环境变量 ACL_CURSEFORGE_API_KEY 中配置已获批的 CurseForge API 密钥。仍可预览本地 ZIP。"
+	},
+	"app.external-import.search": {
+		"message": "搜索整合包"
+	},
+	"app.external-import.previous": {
+		"message": "上一页"
+	},
+	"app.external-import.next": {
+		"message": "下一页"
+	},
+	"app.external-import.no-results": {
+		"message": "没有找到整合包。"
+	},
+	"app.external-import.no-files": {
+		"message": "没有找到版本。"
+	},
+	"app.external-import.choose-version": {
+		"message": "查看版本"
+	},
+	"app.external-import.manual-pack": {
+		"message": "在 CurseForge 获取 ZIP，然后从本地导入。"
+	},
+	"app.external-import.manual-files": {
+		"message": "手动下载的文件"
+	},
+	"app.external-import.manual-description": {
+		"message": "选择存放已从 CurseForge 下载的必需文件的目录。ACL 将依据 CurseForge 元数据或本地元数据 JSON 校验文件长度和 SHA-1。"
+	},
+	"app.external-import.choose-metadata": {
+		"message": "选择元数据 JSON"
+	},
+	"app.external-import.metadata-hint": {
+		"message": "离线元数据格式"
+	},
+	"app.external-import.metadata-fields": {
+		"message": "请提供 JSON 数组，为每个文件填写 projectID、fileID、classId、fileName、fileLength（字节）和 sha1。标准 CurseForge 清单只包含文件 ID，另需提供校验元数据。"
+	},
+	"app.external-import.clear": {
+		"message": "清除选择"
+	},
+	"app.external-import.override-count": {
+		"message": "{count} 个覆盖文件"
+	},
+	"app.external-import.missing-required": {
+		"message": "有 {count} 个必需文件待解决。请提供对应文件和可用于校验的元数据。"
+	},
+	"app.external-import.optional": {
+		"message": "可选"
+	},
+	"app.external-import.download": {
+		"message": "自动下载"
+	},
+	"app.external-import.local": {
+		"message": "已选择本地文件"
+	},
+	"app.external-import.manual-required": {
+		"message": "需手动提供文件"
+	},
+	"app.external-import.metadata-unavailable": {
+		"message": "缺少校验元数据"
+	},
+	"app.external-import.unsupported": {
+		"message": "文件暂不支持"
+	},
+	"app.external-import.working": {
+		"message": "正在读取来源…"
+	},
+	"app.external-import.installing": {
+		"message": "导入任务已排队，可在下载管理查看进度。"
+	},
+	"app.external-import.import": {
+		"message": "导入实例"
+	},
+	"app.external-import.failed": {
+		"message": "无法读取或导入此来源。"
+	},
+	"app.offline-account.label": {
+		"message": "离线玩家"
+	},
+	"app.offline-account.add": {
+		"message": "添加离线玩家"
+	},
+	"app.offline-account.name": {
+		"message": "玩家名"
+	},
+	"app.offline-account.create": {
+		"message": "创建"
+	},
+	"app.offline-account.cancel": {
+		"message": "取消"
+	},
+	"app.launch-diagnostic.java": {
+		"message": "Java 无法启动这个实例。请到实例设置检查 Java 版本。"
+	},
+	"app.launch-diagnostic.missing-mod": {
+		"message": "加载器报告缺少模组（{mod}）。请查看与当前实例兼容的版本。"
+	},
+	"app.launch-diagnostic.game-library": {
+		"message": "游戏库文件可能缺失或损坏。请修复游戏文件后重试。"
+	},
+	"app.launch-diagnostic.unknown-exit": {
+		"message": "Minecraft 异常退出。请查看当前实例的游戏日志。"
+	},
+	"app.launch-diagnostic.title": {
+		"message": "启动诊断"
+	},
+	"app.launch-diagnostic.java-settings": {
+		"message": "打开 Java 设置"
+	},
+	"app.launch-diagnostic.find-mod": {
+		"message": "查找前置模组"
+	},
+	"app.launch-diagnostic.repair": {
+		"message": "修复并重新启动"
+	},
+	"app.launch-diagnostic.logs": {
+		"message": "查看游戏日志"
+	},
+	"app.launch-diagnostic.dismiss": {
+		"message": "关闭"
+	},
+	"app.launch-diagnostic.online-analysis": {
+		"message": "将当前日志发送至 mclo.gs 分析"
+	},
+	"app.launch-diagnostic.no-online-result": {
+		"message": "没有返回适用于这份日志的诊断结果。"
+	},
 	"app": {
 		"file-download": {
 			"canceling": {
@@ -281,6 +548,9 @@
 	"app.appearance-settings.minimize-launcher.description": {
 		"message": "当 Minecraft 进程启动时，将 ACL 最小化。"
 	},
+	"app.appearance-settings.native-decorations.restart-description": {
+		"message": "使用操作系统的标题栏和窗口控件。更改后需重启 ACL。"
+	},
 	"app.appearance-settings.minimize-launcher.title": {
 		"message": "最小化 App"
 	},
@@ -295,6 +565,9 @@
 	},
 	"app.appearance-settings.skip-non-essential-warnings.title": {
 		"message": "跳过非必要的警告"
+	},
+	"app.appearance-settings.theme.description": {
+		"message": "选择 ACL 在此设备上使用的颜色主题。"
 	},
 	"app.appearance-settings.toggle-sidebar.description": {
 		"message": "默认隐藏右侧边栏，并添加一个按钮来显示或隐藏它。"
@@ -329,18 +602,47 @@
 	"app.behavior-settings.startup-and-navigation.title": {
 		"message": "启动与导航"
 	},
-	"app.behavior-settings.sync-across-devices.description": {
-		"message": "在你登录的所有设备上使用这些行为设置。关闭它后可以在设备上单独设置。"
+	"app.behavior-settings.file-manager-default-tab.title": {
+		"message": "文件管理默认打开项"
 	},
-	"app.behavior-settings.sync-across-devices.signed-out-tooltip": {
-		"message": "登录 Modrinth 账户以同步设置。"
-	},
-	"app.behavior-settings.sync-across-devices.title": {
-		"message": "跨设备同步行为"
+	"app.behavior-settings.file-manager-default-tab.description": {
+		"message": "进入实例文件管理时默认显示的分类。"
 	},
 	"app.browse.add-servers-to-instance": {
 		"message": "添加服务器到实例"
 	},
+	"app.file-manager.category.all": { "message": "全部文件" },
+	"app.file-manager.category.mods": { "message": "模组" },
+	"app.file-manager.category.resourcepacks": { "message": "资源包" },
+	"app.file-manager.category.shaderpacks": { "message": "光影包" },
+	"app.file-manager.category.schematics": { "message": "投影原理图" },
+	"app.file-manager.schematic-details": { "message": "原理图详情" },
+	"app.file-manager.schematic-delete-title": { "message": "删除原理图？" },
+	"app.file-manager.schematic-delete-description": { "message": "此操作会从当前实例的 schematics 文件夹中永久删除该文件。" },
+	"app.file-manager.schematic-name": { "message": "名称" },
+	"app.file-manager.schematic-author": { "message": "作者" },
+	"app.file-manager.schematic-dimensions": { "message": "尺寸" },
+	"app.file-manager.schematic-blocks": { "message": "声明方块数" },
+	"app.file-manager.not-provided": { "message": "未提供" },
+	"app.file-manager.schematic-load-failed": { "message": "读取原理图失败" },
+	"app.file-manager.schematic-deleted": { "message": "原理图已删除" },
+	"app.file-manager.no-schematics": { "message": "当前实例没有原理图文件" },
+	"app.file-manager.content-details": { "message": "文件详情" },
+	"app.file-manager.content-name": { "message": "名称" },
+	"app.file-manager.content-version": { "message": "版本" },
+	"app.file-manager.content-file-name": { "message": "文件名" },
+	"app.file-manager.content-description": { "message": "描述" },
+	"app.file-manager.content-authors": { "message": "作者" },
+	"app.file-manager.content-delete-title": { "message": "删除此文件？" },
+	"app.file-manager.content-delete-description": { "message": "此操作会从当前实例中删除该内容文件。" },
+	"app.file-manager.content-enabled": { "message": "停用" },
+	"app.file-manager.content-disabled": { "message": "启用" },
+	"app.file-manager.content-toggle-failed": { "message": "更改文件状态失败" },
+	"app.file-manager.no-category-content": { "message": "此分类中没有文件" },
+	"app.file-manager.pack-files": { "message": "{count} 个项目" },
+	"app.file-manager.modified": { "message": "修改时间" },
+	"app.file-manager.content-size": { "message": "大小" },
+	"app.file-manager.locate": { "message": "定位文件" },
 	"app.browse.add-to-an-instance": {
 		"message": "添加到实例"
 	},
@@ -452,6 +754,15 @@
 	"app.download-manager.complete": {
 		"message": "完成"
 	},
+	"app.download-manager.destination-error": {
+		"message": "无法打开保存对话框，请重试。"
+	},
+	"app.download-manager.download-error": {
+		"message": "无法下载文件。"
+	},
+	"app.download-manager.download-url": {
+		"message": "下载链接"
+	},
 	"app.download-manager.duplicated-instance": {
 		"message": "复制实例"
 	},
@@ -473,14 +784,23 @@
 	"app.download-manager.instance-installation": {
 		"message": "安装的实例"
 	},
+	"app.download-manager.invalid-url": {
+		"message": "请输入有效的 HTTP 或 HTTPS 链接，链接中不能包含用户名或密码。"
+	},
 	"app.download-manager.modpack": {
 		"message": "整合包"
 	},
 	"app.download-manager.modpack-installation": {
 		"message": "安装的整合包"
 	},
+	"app.download-manager.new-download": {
+		"message": "新建下载"
+	},
 	"app.download-manager.new-instance": {
 		"message": "新建实例"
+	},
+	"app.download-manager.no-tasks": {
+		"message": "暂无任务"
 	},
 	"app.download-manager.pause": {
 		"message": "暂停安装"
@@ -599,8 +919,14 @@
 	"app.file-download.canceling": {
 		"message": "正在取消下载…"
 	},
+	"app.file-download.pause": {
+		"message": "暂停下载"
+	},
 	"app.file-download.preparing": {
 		"message": "正在准备下载…"
+	},
+	"app.file-download.resume": {
+		"message": "继续下载"
 	},
 	"app.file-download.waiting": {
 		"message": "等待服务器响应…"
@@ -611,11 +937,20 @@
 	"app.guild-account.email": {
 		"message": "邮箱"
 	},
+	"app.guild-account.loading": {
+		"message": "正在读取登录状态…"
+	},
 	"app.guild-account.not-signed-in": {
 		"message": "未登录"
 	},
 	"app.guild-account.password": {
 		"message": "密码"
+	},
+	"app.guild-account.read-failed": {
+		"message": "无法读取登录状态"
+	},
+	"app.guild-account.retry-read": {
+		"message": "重试"
 	},
 	"app.guild-account.sign-in": {
 		"message": "登录"
@@ -634,6 +969,9 @@
 	},
 	"app.guild-account.signed-in-as": {
 		"message": "当前登录"
+	},
+	"app.guild-account.signing-out": {
+		"message": "正在退出…"
 	},
 	"app.guild-account.title": {
 		"message": "公会账号"
@@ -706,9 +1044,6 @@
 	},
 	"app.guild.pack.reject-body": {
 		"message": "无法识别当前的导入操作。该压缩包内没有整合包清单（modrinth.index.json、manifest.json）或实例版本文件。"
-	},
-	"app.guild.pack.reject-curseforge": {
-		"message": "这是 CurseForge 导出的整合包，包里只有模组编号、没有模组文件，安装需要 CurseForge API（本项目未接入）。请改用 .mrpack 或完整实例归档。"
 	},
 	"app.guild.pack.reject-title": {
 		"message": "无法导入"
@@ -1189,6 +1524,66 @@
 	},
 	"app.instance.tab.worlds": {
 		"message": "世界"
+	},
+	"app.instance.archive.description": {
+		"message": "将世界、游戏设置、模组和资源文件打包。导出前请退出 Minecraft。"
+	},
+	"app.instance.archive.export": {
+		"message": "导出实例归档"
+	},
+	"app.instance.archive.exported": {
+		"message": "实例归档已保存"
+	},
+	"app.instance.archive.exporting": {
+		"message": "正在导出实例…"
+	},
+	"app.instance.archive.restore": {
+		"message": "恢复实例归档"
+	},
+	"app.instance.archive.restored": {
+		"message": "已恢复为独立的新实例"
+	},
+	"app.instance.archive.restoring": {
+		"message": "正在恢复实例…"
+	},
+	"app.instance.version-switch.auto-disable": {
+		"message": "禁用可修改且不兼容的模组（{count} 个）"
+	},
+	"app.instance.version-switch.description": {
+		"message": "将切换到 Minecraft {version}（{loader}）。请核对下方内容。"
+	},
+	"app.instance.version-switch.disabled-count": {
+		"message": "已禁用 {count} 个不兼容模组"
+	},
+	"app.instance.version-switch.done": {
+		"message": "Minecraft 版本已切换"
+	},
+	"app.instance.version-switch.game-mismatch": {
+		"message": "请替换为支持目标 Minecraft 版本的文件"
+	},
+	"app.instance.version-switch.loader-mismatch": {
+		"message": "请替换为支持目标模组加载器的文件"
+	},
+	"app.instance.version-switch.no-issues": {
+		"message": "已索引的内容中未发现兼容性问题。"
+	},
+	"app.instance.version-switch.title": {
+		"message": "切换 Minecraft 版本"
+	},
+	"app.instance.version-switch.unknown": {
+		"message": "需要手动确认兼容性"
+	},
+	"app.instance.worlds.backup-complete": {
+		"message": "世界备份已保存到实例的 backups 文件夹"
+	},
+	"app.instance.worlds.backup-world": {
+		"message": "备份世界"
+	},
+	"app.instance.worlds.restore-complete": {
+		"message": "世界已恢复到 {folder}"
+	},
+	"app.instance.worlds.restore-world": {
+		"message": "恢复世界"
 	},
 	"app.instance.worlds.add-server": {
 		"message": "添加服务器"
@@ -1743,16 +2138,22 @@
 		"message": "自动 · 优先跟随系统代理，其次环境变量"
 	},
 	"app.network-settings.proxy.current-manual": {
-		"message": "手动 · {url}"
-	},
-	"app.network-settings.proxy.current-manual-empty": {
-		"message": "手动 · 未填写地址"
+		"message": "手动代理"
 	},
 	"app.network-settings.proxy.current-off": {
 		"message": "直连 · 忽略所有代理设置"
 	},
 	"app.network-settings.proxy.description": {
 		"message": "控制 ACL 访问 Modrinth 与微软登录的方式。除非明确知道需要，否则保持自动即可。"
+	},
+	"app.network-settings.proxy.invalid-address": {
+		"message": "请输入有效的 HTTP 或 HTTPS 代理地址。"
+	},
+	"app.network-settings.proxy.load-failed": {
+		"message": "无法读取已保存的代理设置。"
+	},
+	"app.network-settings.proxy.loading": {
+		"message": "正在读取代理设置…"
 	},
 	"app.network-settings.proxy.mode-auto": {
 		"message": "自动"
@@ -1773,22 +2174,46 @@
 		"message": "忽略所有代理设置，直接连接"
 	},
 	"app.network-settings.proxy.pending-restart": {
-		"message": "修改后需重启 ACL 才生效。"
+		"message": "重启 ACL 后应用已保存的代理设置。"
+	},
+	"app.network-settings.proxy.probe-error": {
+		"message": "连接请求失败"
+	},
+	"app.network-settings.proxy.probe-timeout": {
+		"message": "连接超时"
 	},
 	"app.network-settings.proxy.reachable": {
 		"message": "可达"
 	},
+	"app.network-settings.proxy.retry": {
+		"message": "重试"
+	},
 	"app.network-settings.proxy.save": {
 		"message": "保存"
 	},
+	"app.network-settings.proxy.save-failed": {
+		"message": "无法保存代理设置，请重试。"
+	},
 	"app.network-settings.proxy.saved": {
-		"message": "已保存。重启 ACL 后新的代理设置生效。"
+		"message": "代理设置已保存。"
+	},
+	"app.network-settings.proxy.saved-invalid": {
+		"message": "已保存的代理地址无效。ACL 使用此配置启动时会改为直连。"
+	},
+	"app.network-settings.proxy.saving": {
+		"message": "正在保存…"
 	},
 	"app.network-settings.proxy.test": {
 		"message": "测试连接"
 	},
+	"app.network-settings.proxy.test-failed": {
+		"message": "无法开始连接测试，请重试。"
+	},
 	"app.network-settings.proxy.test-hint": {
 		"message": "用上方设置试连 Modrinth 与微软登录，不会保存"
+	},
+	"app.network-settings.proxy.testing": {
+		"message": "正在测试…"
 	},
 	"app.network-settings.proxy.title": {
 		"message": "网络代理"
@@ -1798,6 +2223,9 @@
 	},
 	"app.network-settings.proxy.unsaved-changes": {
 		"message": "有未保存的改动"
+	},
+	"app.network-settings.proxy.url-label": {
+		"message": "代理地址"
 	},
 	"app.network-settings.proxy.url-placeholder": {
 		"message": "http://127.0.0.1:7890"
@@ -1810,6 +2238,36 @@
 	},
 	"app.notification.warning": {
 		"message": "警告"
+	},
+	"app.optifine.available": {
+		"message": "从官网下载 OptiFine {release}，然后选择 JAR 安装到当前实例。"
+	},
+	"app.optifine.conflict": {
+		"message": "当前实例已存在其他 OptiFine 文件，请在模组页移除后再安装。"
+	},
+	"app.optifine.disabled": {
+		"message": "OptiFine 已停用，可在模组页启用。"
+	},
+	"app.optifine.install": {
+		"message": "选择 JAR 并安装"
+	},
+	"app.optifine.installed": {
+		"message": "已安装 OptiFine {release}。"
+	},
+	"app.optifine.official": {
+		"message": "打开官网"
+	},
+	"app.optifine.repair-needed": {
+		"message": "OptiFine 启动所需的文件不完整。"
+	},
+	"app.optifine.status-error": {
+		"message": "无法检查 OptiFine 安装状态。"
+	},
+	"app.optifine.unavailable": {
+		"message": "Minecraft 安装完成后，可在未锁定的本地实例中安装 OptiFine。"
+	},
+	"app.optifine.unsupported": {
+		"message": "支持原版 1.20.1 和 1.21.1，以及 1.20.1 的 Forge 47.2.18 和 1.21.1 的 Forge 52.0.16。"
 	},
 	"app.performance-settings.hardware-acceleration.description": {
 		"message": "使用 GPU 渲染界面。若窗口出现黑屏、闪烁或显卡驱动崩溃，请关闭此项。"
@@ -3233,11 +3691,8 @@
 	"app.settings.resource-management.app-cache.confirm.description": {
 		"message": "在缓存重建之前，应用加载可能会更慢。"
 	},
-	"app.settings.resource-management.app-cache.description": {
-		"message": "清除缓存数据，然后从Modrinth重新下载。在缓存重建之前，应用加载可能会更慢。"
-	},
 	"app.settings.resource-management.app-cache.title": {
-		"message": "App缓存"
+		"message": "应用缓存"
 	},
 	"app.settings.resource-management.app-database-backups.description": {
 		"message": "这里存储了重要的应用数据的备份，以备日后需要恢复。"
@@ -3259,9 +3714,6 @@
 	},
 	"app.settings.resource-management.app-directory.title": {
 		"message": "应用目录"
-	},
-	"app.settings.resource-management.debug-info.description": {
-		"message": "导出应用日志和诊断数据到 ZIP 文件用于与 Modrinth 支持共享。"
 	},
 	"app.settings.resource-management.debug-info.export": {
 		"message": "导出调试信息"
@@ -3628,6 +4080,18 @@
 	},
 	"app.settings.tabs.window": {
 		"message": "窗口"
+	},
+	"app.settings.troubleshooting.cache-description": {
+		"message": "清除缓存后，ACL 会按需重新获取数据。缓存重建期间，应用加载可能较慢。"
+	},
+	"app.settings.troubleshooting.clear-cache": {
+		"message": "清除缓存"
+	},
+	"app.settings.troubleshooting.clear-cache.confirm.title": {
+		"message": "清除应用缓存？"
+	},
+	"app.settings.troubleshooting.debug-info-description": {
+		"message": "将 ACL 日志和诊断数据导出为 ZIP 文件，供排查问题时使用。"
 	},
 	"app.shared-instance-publish.preparing": {
 		"message": "正在准备更新…"
@@ -4323,7 +4787,7 @@
 		"message": "正在添加文件（{completed}/{total}）"
 	},
 	"instance.files.managed-content-read-only": {
-		"message": "通过内容选项卡管理已安装的内容"
+		"message": "请在模组分类中管理已安装的模组"
 	},
 	"instance.files.save-as": {
 		"message": "保存为……"
@@ -5097,13 +5561,22 @@
 		"message": "登录 Minecraft"
 	},
 	"minecraft-required.description": {
-		"message": "你需要先登录拥有 Minecraft 的 Microsoft 账户，然后才能启动游戏。"
+		"message": "登录 Microsoft 账户可使用 Minecraft 在线服务。创建离线玩家可进行本地游玩。"
 	},
 	"minecraft-required.description-header": {
-		"message": "登录 Microsoft 账户"
+		"message": "选择 Minecraft 账户"
 	},
 	"minecraft-required.dont-have-account": {
 		"message": "没有账户？"
+	},
+	"minecraft-required.drop-hint": {
+		"message": "（或是拖动网站卡片以登录）"
+	},
+	"minecraft-required.external": {
+		"message": "第三方登录"
+	},
+	"minecraft-required.external-description": {
+		"message": "使用第三方认证服务器提供的账号登录。"
 	},
 	"minecraft-required.get-minecraft": {
 		"message": "获取 Minecraft"
@@ -5112,7 +5585,22 @@
 		"message": "获取支持"
 	},
 	"minecraft-required.header": {
-		"message": "需要 Minecraft"
+		"message": "选择登录方式"
+	},
+	"minecraft-required.invalid-drop": {
+		"message": "请拖入认证网站提供的 Authlib-Injector 登录卡片。"
+	},
+	"minecraft-required.microsoft": {
+		"message": "正版验证"
+	},
+	"minecraft-required.microsoft-description": {
+		"message": "通过 Microsoft 验证游戏购买并使用官方在线服务。"
+	},
+	"minecraft-required.offline": {
+		"message": "离线登录"
+	},
+	"minecraft-required.offline-description": {
+		"message": "输入玩家名，开始本地游玩。"
 	},
 	"minecraft-required.sign-in": {
 		"message": "登录 Microsoft 账户"
@@ -5152,6 +5640,9 @@
 	},
 	"onboarding-checklist.create-instance": {
 		"message": "创建第一个实例"
+	},
+	"onboarding-checklist.login-guild": {
+		"message": "登录公会账号"
 	},
 	"onboarding-checklist.login-minecraft": {
 		"message": "登录 Minecraft 账号"

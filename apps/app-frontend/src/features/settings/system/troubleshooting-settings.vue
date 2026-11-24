@@ -55,9 +55,8 @@ const messages = defineMessages({
 		defaultMessage: 'Debug info',
 	},
 	debugInfoDescription: {
-		id: 'app.settings.resource-management.debug-info.description',
-		defaultMessage:
-			'Export app logs and diagnostic data to a ZIP file to share with Modrinth support.',
+		id: 'app.settings.troubleshooting.debug-info-description',
+		defaultMessage: 'Export ACL logs and diagnostic data to a ZIP file for troubleshooting.',
 	},
 	exportDebugInfo: {
 		id: 'app.settings.resource-management.debug-info.export',
@@ -80,9 +79,9 @@ const messages = defineMessages({
 		defaultMessage: 'The app may load more slowly until the cache is rebuilt.',
 	},
 	appCacheDescription: {
-		id: 'app.settings.resource-management.app-cache.description',
+		id: 'app.settings.troubleshooting.cache-description',
 		defaultMessage:
-			'Clear cached data and download it again from Modrinth. The app may load more slowly until the cache is rebuilt.',
+			'Clear cached data. ACL will fetch it again as needed and may load more slowly until the cache is rebuilt.',
 	},
 	appDatabaseBackupsTitle: {
 		id: 'app.settings.resource-management.app-database-backups.title',

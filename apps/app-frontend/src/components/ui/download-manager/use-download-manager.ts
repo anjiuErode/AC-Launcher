@@ -30,6 +30,7 @@ import {
 	externalFileDownloads,
 	type ExternalFileDownloadTask,
 	getExternalFileDownloadRate,
+	loadExternalUrlDownloads,
 } from './external-file-downloads'
 import { createInstallJobProgressTracker } from './install-job-progress'
 import {
@@ -85,7 +86,19 @@ const fileMessages = defineMessages({
 	waiting: { id: 'app.file-download.waiting', defaultMessage: 'Waiting for the server…' },
 	canceling: { id: 'app.file-download.canceling', defaultMessage: 'Canceling download…' },
 	canceled: { id: 'app.action-bar.install.summary.canceled', defaultMessage: 'Canceled' },
+	paused: { id: 'app.download-manager.paused', defaultMessage: 'Paused' },
+	failed: {
+		id: 'app.download-manager.download-error',
+		defaultMessage: 'Could not download the file.',
+	},
 })
+
+const fileStageMessages = {
+	preparing: fileMessages.preparing,
+	waiting: fileMessages.waiting,
+	downloading: commonMessages.downloadingButton,
+	saving: commonMessages.savingButton,
+}
 
 const debugExportMessages = defineMessages({
 	canceled: { id: 'app.action-bar.install.summary.canceled', defaultMessage: 'Canceled' },
@@ -341,23 +354,18 @@ export function useDownloadManager() {
 	function buildFileRow(task: ExternalFileDownloadTask): DownloadManagerJob {
 		const rate = getExternalFileDownloadRate(task, now.value)
 		const progress = task.totalBytes ? Math.min(0.99, task.downloadedBytes / task.totalBytes) : 0
+		const statusMessage = {
+			running: fileStageMessages[task.stage],
+			failed: fileMessages.failed,
+			canceled: fileMessages.canceled,
+			succeeded: commonMessages.savedLabel,
+		}[task.status]
 		const text =
-			task.error ??
+			(!task.retry && task.error) ||
 			formatMessage(
-				task.canceling
-					? fileMessages.canceling
-					: task.status === 'canceled'
-						? fileMessages.canceled
-						: task.status === 'succeeded'
-							? commonMessages.savedLabel
-							: task.stage === 'preparing'
-								? fileMessages.preparing
-								: task.stage === 'waiting'
-									? fileMessages.waiting
-									: task.stage === 'saving'
-										? commonMessages.savingButton
-										: commonMessages.downloadingButton,
+				task.canceling ? fileMessages.canceling : task.paused ? fileMessages.paused : statusMessage,
 			)
+		const canControl = task.status === 'running' && (task.paused || task.stage !== 'saving')
 
 		return {
 			id: task.id,
@@ -366,10 +374,10 @@ export function useDownloadManager() {
 			createdAt: task.createdAt,
 			instanceId: null,
 			status: task.status,
-			paused: false,
+			paused: task.paused,
 			canceling: task.canceling,
-			canPause: false,
-			canCancel: task.status === 'running' && task.stage !== 'saving',
+			canPause: canControl && !!task.togglePause,
+			canCancel: canControl,
 			title: task.serverName ?? task.filename,
 			iconUrl: null,
 			text,
@@ -378,7 +386,10 @@ export function useDownloadManager() {
 			progress,
 			overallProgress: task.status === 'succeeded' ? 1 : progress,
 			progressLabel:
-				task.status === 'running' && (task.stage === 'downloading' || task.stage === 'saving')
+				task.status === 'running' &&
+				(task.stage === 'downloading' ||
+					task.stage === 'saving' ||
+					(task.paused && task.downloadedBytes > 0))
 					? [
 							task.totalBytes
 								? `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}`
@@ -393,7 +404,7 @@ export function useDownloadManager() {
 				rate && task.totalBytes
 					? display.formatEta((task.totalBytes - task.downloadedBytes) / rate)
 					: '',
-			canRetry: false,
+			canRetry: task.status === 'failed' && !!task.retry,
 			canCopyDetails: !!task.error,
 			copied: copiedJobs.value.has(task.id),
 			busy: busyJobs.value.has(task.id),
@@ -532,6 +543,11 @@ export function useDownloadManager() {
 	}
 
 	async function retry(id: string) {
+		const file = externalFileDownloads.value.get(id)
+		if (file?.retry) {
+			await runAction(id, file.retry)
+			return
+		}
 		await runJobAction(id, () => install_job_retry(id))
 	}
 
@@ -551,6 +567,11 @@ export function useDownloadManager() {
 	}
 
 	async function togglePause(id: string) {
+		const file = externalFileDownloads.value.get(id)
+		if (file?.togglePause) {
+			await runAction(id, file.togglePause)
+			return
+		}
 		const current = jobs.value.get(id)
 		if (!current?.can_pause) return
 		await runJobAction(id, () => (current.paused ? install_job_resume(id) : install_job_pause(id)))
@@ -564,7 +585,9 @@ export function useDownloadManager() {
 		}
 		const file = externalFileDownloads.value.get(id)
 		if (file) {
-			if (file.status !== 'running') externalFileDownloads.value.delete(id)
+			if (file.status === 'running') return
+			if (file.dismiss) await runAction(id, file.dismiss)
+			else externalFileDownloads.value.delete(id)
 			return
 		}
 		const publish = sharedInstancePublishes.value.get(id)
@@ -635,6 +658,7 @@ export function useDownloadManager() {
 	})
 	onMounted(() => {
 		void refresh()
+		void loadExternalUrlDownloads().catch(reportError)
 	})
 	onScopeDispose(() => {
 		disposed = true

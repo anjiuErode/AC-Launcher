@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	ClipboardCopyIcon,
+	DatabaseBackupIcon,
 	EditIcon,
 	ExternalIcon,
 	EyeIcon,
@@ -74,6 +75,7 @@ const { addNotification } = injectNotificationManager()
 const emit = defineEmits<{
 	(e: 'play' | 'play-instance' | 'update' | 'stop' | 'refresh' | 'edit' | 'delete' | 'desync'): void
 	(e: 'open-folder', world: SingleplayerWorld): void
+	(e: 'backup', world: SingleplayerWorld): void
 }>()
 
 const props = withDefaults(
@@ -85,6 +87,8 @@ const props = withDefaults(
 		supportsServerQuickPlay?: boolean
 		supportsWorldQuickPlay?: boolean
 		quarantined?: boolean
+		showBackup?: boolean
+		backupDisabled?: boolean
 		currentProtocol?: ProtocolVersion | null
 		highlighted?: boolean
 
@@ -187,6 +191,7 @@ const messages = defineMessages({
 		defaultMessage: 'Failed to create shortcut',
 	},
 	moreOptions: { id: 'instance.worlds.more-options', defaultMessage: 'More options' },
+	backupWorld: { id: 'app.instance.worlds.backup-world', defaultMessage: 'Back up world' },
 	instanceLocked: {
 		id: 'instance.worlds.instance-locked',
 		defaultMessage: 'This instance has been locked',
@@ -386,6 +391,16 @@ const overflowOptions = computed((): ButtonMenuOption[] => [
 		icon: FolderOpenIcon,
 		shown: props.world.type === 'singleplayer',
 		action: () => (props.world.type === 'singleplayer' ? emit('open-folder', props.world) : {}),
+	},
+	{
+		id: 'backup',
+		label: formatMessage(messages.backupWorld),
+		icon: DatabaseBackupIcon,
+		shown: props.showBackup && props.world.type === 'singleplayer',
+		disabled: locked.value || props.backupDisabled,
+		action: () => {
+			if (props.world.type === 'singleplayer') emit('backup', props.world)
+		},
 	},
 	{
 		type: 'divider',

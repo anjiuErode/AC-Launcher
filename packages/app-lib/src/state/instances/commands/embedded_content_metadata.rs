@@ -19,6 +19,7 @@ const MAX_ICON_BYTES: u64 = 8 * 1024 * 1024;
 const PREFERRED_ICON_SIZE: u32 = 96;
 const MAX_NAME_CHARS: usize = 256;
 const MAX_VERSION_CHARS: usize = 128;
+const MAX_DESCRIPTION_CHARS: usize = 4096;
 
 pub(crate) struct ArchiveInspection {
     pub metadata: Option<EmbeddedContentMetadata>,
@@ -124,7 +125,15 @@ fn inspect_pack<R: Read + Seek>(
     archive: &mut ZipArchive<R>,
 ) -> (Option<EmbeddedContentMetadata>, Option<Bytes>) {
     let icon = read_icon_entry(archive, "pack.png");
-    let metadata = EmbeddedContentMetadata::default();
+    let description = read_json_entry(archive, "pack.mcmeta").and_then(|root| {
+        root.get("pack")
+            .and_then(|pack| pack.get("description"))
+            .and_then(json_plain_text)
+    });
+    let metadata = EmbeddedContentMetadata {
+        description,
+        ..Default::default()
+    };
 
     if metadata.is_empty() && icon.is_none() {
         (None, None)
@@ -230,6 +239,15 @@ fn parse_fabric_metadata<R: Read + Seek>(
             .get("version")
             .and_then(json_scalar_string)
             .and_then(|value| clean_string(&value, MAX_VERSION_CHARS)),
+        description: root
+            .get("description")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_DESCRIPTION_CHARS)),
+        mod_id: root
+            .get("id")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_NAME_CHARS)),
+        authors: json_authors(root.get("authors")),
         ..Default::default()
     };
     let icon = root.get("icon").and_then(json_icon_path);
@@ -253,6 +271,15 @@ fn parse_quilt_metadata<R: Read + Seek>(
             .get("version")
             .and_then(json_scalar_string)
             .and_then(|value| clean_string(&value, MAX_VERSION_CHARS)),
+        description: display
+            .get("description")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_DESCRIPTION_CHARS)),
+        mod_id: loader
+            .get("id")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_NAME_CHARS)),
+        authors: json_authors(display.get("contributors").or_else(|| display.get("authors"))),
         ..Default::default()
     };
     let icon = display
@@ -289,6 +316,19 @@ fn parse_toml_metadata<R: Read + Seek>(
         EmbeddedContentMetadata {
             name,
             version,
+            description: mod_table
+                .get("description")
+                .and_then(TomlValue::as_str)
+                .and_then(|value| clean_string(value, MAX_DESCRIPTION_CHARS)),
+            mod_id: mod_table
+                .get("modId")
+                .and_then(TomlValue::as_str)
+                .and_then(|value| clean_string(value, MAX_NAME_CHARS)),
+            authors: mod_table
+                .get("authors")
+                .and_then(toml_scalar_string)
+                .and_then(|value| clean_string(&value, MAX_METADATA_BYTES as usize))
+                .map(|value| vec![value]),
             ..Default::default()
         },
         icon,
@@ -317,6 +357,15 @@ fn parse_legacy_forge_metadata<R: Read + Seek>(
             .get("version")
             .and_then(json_scalar_string)
             .and_then(|value| clean_string(&value, MAX_VERSION_CHARS)),
+        description: entry
+            .get("description")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_DESCRIPTION_CHARS)),
+        mod_id: entry
+            .get("modid")
+            .and_then(JsonValue::as_str)
+            .and_then(|value| clean_string(value, MAX_NAME_CHARS)),
+        authors: json_authors(entry.get("authorList").or_else(|| entry.get("authors"))),
         ..Default::default()
     };
     let icon = entry
@@ -402,6 +451,56 @@ fn json_scalar_string(value: &JsonValue) -> Option<String> {
         JsonValue::Number(value) => Some(value.to_string()),
         _ => None,
     }
+}
+
+fn json_authors(value: Option<&JsonValue>) -> Option<Vec<String>> {
+	let authors: Vec<String> = match value? {
+		JsonValue::String(author) => clean_string(author, MAX_NAME_CHARS)
+			.into_iter()
+			.collect(),
+		JsonValue::Object(authors) => authors
+			.keys()
+			.filter_map(|author| clean_string(author, MAX_NAME_CHARS))
+			.take(32)
+			.collect(),
+		JsonValue::Array(authors) => authors
+			.iter()
+			.filter_map(|author| {
+				author
+					.as_str()
+					.or_else(|| author.get("name").and_then(JsonValue::as_str))
+					.and_then(|author| clean_string(author, MAX_NAME_CHARS))
+			})
+			.take(32)
+			.collect(),
+		_ => return None,
+	};
+	(!authors.is_empty()).then_some(authors)
+}
+
+fn json_plain_text(value: &JsonValue) -> Option<String> {
+	fn append(value: &JsonValue, output: &mut String) {
+		match value {
+			JsonValue::String(text) => output.push_str(text),
+			JsonValue::Array(parts) => {
+				for part in parts {
+					append(part, output);
+				}
+			}
+			JsonValue::Object(component) => {
+				if let Some(text) = component.get("text") {
+					append(text, output);
+				}
+				if let Some(extra) = component.get("extra") {
+					append(extra, output);
+				}
+			}
+			_ => {}
+		}
+	}
+	let mut output = String::new();
+	append(value, &mut output);
+	clean_string(&output, MAX_DESCRIPTION_CHARS)
 }
 
 fn toml_scalar_string(value: &TomlValue) -> Option<String> {
@@ -495,12 +594,12 @@ pub(crate) async fn resolve_embedded_content_metadata(
     let tracked = crate::state::instances::adapters::sqlite::content_rows::get_instance_files(&instance.id, &state.pool).await?;
     let mut candidates = HashMap::new();
     for (relative_path, file) in files {
-        if file.metadata.is_some()
-            || !matches!(
+        if !matches!(
                 file.project_type,
                 ProjectType::Mod
                     | ProjectType::DataPack
                     | ProjectType::ResourcePack
+                    | ProjectType::ShaderPack
             )
         {
             continue;
@@ -624,5 +723,99 @@ pub(crate) async fn resolve_embedded_content_metadata(
 }
 
 fn metadata_cache_key(hash: &str, loader: ModLoader) -> String {
-    format!("{hash}-{}", loader.as_str())
+    format!("{hash}-{}-v2", loader.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::io::{Cursor, Write};
+	use zip::write::SimpleFileOptions;
+
+	fn archive(files: &[(&str, &str)]) -> Cursor<Vec<u8>> {
+		let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+		for (path, body) in files {
+			writer.start_file(*path, SimpleFileOptions::default()).unwrap();
+			writer.write_all(body.as_bytes()).unwrap();
+		}
+		writer.finish().unwrap()
+	}
+
+	#[test]
+	fn parses_fabric_metadata_fields() {
+		let mut zip = ZipArchive::new(archive(&[("fabric.mod.json", r#"{
+			"id":"example_mod","name":"Example","version":"2.3",
+			"description":"A local mod","authors":["One",{"name":"Two"}]
+		}"#)])).unwrap();
+		let (metadata, _) = parse_fabric_metadata(&mut zip).unwrap();
+		assert_eq!(metadata.mod_id.as_deref(), Some("example_mod"));
+		assert_eq!(metadata.description.as_deref(), Some("A local mod"));
+		assert_eq!(metadata.authors, Some(vec!["One".into(), "Two".into()]));
+	}
+
+	#[test]
+	fn reads_resource_pack_component_description() {
+		let mut zip = ZipArchive::new(archive(&[("pack.mcmeta", r#"{
+			"pack":{"description":{"text":"Pack ","extra":[{"text":"description"}]}}
+		}"#)])).unwrap();
+		let (metadata, _) = inspect_pack(&mut zip);
+		assert_eq!(metadata.unwrap().description.as_deref(), Some("Pack description"));
+	}
+
+	#[test]
+	fn parses_quilt_metadata_and_contributors() {
+		let mut zip = ZipArchive::new(archive(&[("quilt.mod.json", r#"{
+			quilt_loader: { id: 'quilt_sample', version: '1.2', metadata: {
+				name: 'Quilt Sample', description: 'Quilt local metadata',
+				contributors: { 'Quilt Author': 'Owner' }
+			} }
+		}"#)])).unwrap();
+		let (metadata, _) = parse_quilt_metadata(&mut zip).unwrap();
+		assert_eq!(metadata.mod_id.as_deref(), Some("quilt_sample"));
+		assert_eq!(metadata.description.as_deref(), Some("Quilt local metadata"));
+		assert_eq!(metadata.authors, Some(vec!["Quilt Author".to_string()]));
+	}
+
+	#[test]
+	fn parses_forge_metadata_fields() {
+		let body = "[[mods]]\nmodId = 'forge_sample'\ndisplayName = 'Forge Sample'\nversion = '1.0'\ndescription = 'Forge local metadata'\nauthors = 'Forge Author'\n";
+		let mut zip = ZipArchive::new(archive(&[("META-INF/mods.toml", body)])).unwrap();
+		let (metadata, _) = parse_toml_metadata(&mut zip, "META-INF/mods.toml", &HashMap::new()).unwrap();
+		assert_eq!(metadata.mod_id.as_deref(), Some("forge_sample"));
+		assert_eq!(metadata.description.as_deref(), Some("Forge local metadata"));
+		assert_eq!(metadata.authors, Some(vec!["Forge Author".to_string()]));
+	}
+
+	#[test]
+	fn parses_legacy_forge_metadata_fields() {
+		let mut zip = ZipArchive::new(archive(&[("mcmod.info", r#"[{"modid":"old_sample","name":"Old Sample","version":"2","description":"Legacy local metadata","authorList":["Old Author"]}]"#)])).unwrap();
+		let (metadata, _) = parse_legacy_forge_metadata(&mut zip).unwrap();
+		assert_eq!(metadata.mod_id.as_deref(), Some("old_sample"));
+		assert_eq!(metadata.description.as_deref(), Some("Legacy local metadata"));
+		assert_eq!(metadata.authors, Some(vec!["Old Author".to_string()]));
+	}
+
+	#[test]
+	fn malformed_and_oversized_manifests_are_ignored() {
+		let mut malformed = ZipArchive::new(archive(&[("fabric.mod.json", "{bad json")])).unwrap();
+		assert!(parse_fabric_metadata(&mut malformed).is_none());
+		let oversized = "x".repeat(MAX_METADATA_BYTES as usize + 1);
+		let mut large = ZipArchive::new(archive(&[("fabric.mod.json", &oversized)])).unwrap();
+		assert!(parse_fabric_metadata(&mut large).is_none());
+	}
+
+	#[test]
+	fn ignores_malformed_and_oversized_description_values() {
+		assert_eq!(json_plain_text(&JsonValue::Bool(true)), None);
+		let long = "x".repeat(MAX_DESCRIPTION_CHARS + 100);
+		let value = json_plain_text(&JsonValue::String(long)).unwrap();
+		assert_eq!(value.chars().count(), MAX_DESCRIPTION_CHARS);
+		let author = JsonValue::String("x".repeat(400));
+		assert_eq!(json_authors(Some(&author)).unwrap()[0].len(), MAX_NAME_CHARS);
+	}
+
+	#[test]
+	fn metadata_cache_key_is_versioned() {
+		assert!(metadata_cache_key("abc", ModLoader::Fabric).ends_with("-v2"));
+	}
 }

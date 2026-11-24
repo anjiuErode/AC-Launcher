@@ -1,4 +1,5 @@
 //! Functions for fetching information from the Internet
+use super::download::{DownloadBody, download_body};
 use super::io::{self, IOError};
 use crate::event::LoadingBarId;
 use crate::event::emit::emit_loading;
@@ -352,6 +353,50 @@ pub struct ProxyConfig {
 	pub url: Option<String>,
 }
 
+impl ProxyConfig {
+	/// 校验候选配置，同时移除非手动模式残留的地址。
+	pub fn normalized(mut self) -> Option<Self> {
+		self.url = if self.mode == ProxyMode::Manual {
+			let address = self.url.as_deref()?.trim();
+			parse_proxy_url(address)?;
+			Some(address.to_owned())
+		} else {
+			None
+		};
+		Some(self)
+	}
+
+	pub fn same_route(&self, other: &Self) -> bool {
+		if self.mode != other.mode {
+			return false;
+		}
+		if self.mode != ProxyMode::Manual {
+			return true;
+		}
+		match (
+			self.url.as_deref().and_then(parse_proxy_url),
+			other.url.as_deref().and_then(parse_proxy_url),
+		) {
+			(Some(previous), Some(next)) => previous == next,
+			_ => false,
+		}
+	}
+}
+
+fn parse_proxy_url(address: &str) -> Option<url::Url> {
+	let address = address.trim();
+	if address.is_empty() {
+		return None;
+	}
+	let parsed = if address.contains("://") {
+		url::Url::parse(address)
+	} else {
+		url::Url::parse(&format!("http://{address}"))
+	}
+	.ok()?;
+	(matches!(parsed.scheme(), "http" | "https") && parsed.has_host()).then_some(parsed)
+}
+
 static PROXY_CONFIG: std::sync::RwLock<Option<ProxyConfig>> = std::sync::RwLock::new(None);
 
 /// 必须在任何 HTTP 客户端首次构建前调用（启动早期）
@@ -377,17 +422,18 @@ fn apply_proxy(
 		ProxyMode::Auto => builder,
 		ProxyMode::Off => builder.no_proxy(),
 		ProxyMode::Manual => {
-			let url = config.url.clone().unwrap_or_default();
-			if url.trim().is_empty() {
-				return builder.no_proxy();
-			}
-			match reqwest::Proxy::all(url.trim()) {
-				Ok(proxy) => builder.proxy(proxy.no_proxy(
+			let proxy = config
+				.url
+				.as_deref()
+				.and_then(parse_proxy_url)
+				.and_then(|address| reqwest::Proxy::all(address).ok());
+			match proxy {
+				Some(proxy) => builder.proxy(proxy.no_proxy(
 					// 回环地址永远直连，避免本地服务被代理劫持
 					reqwest::NoProxy::from_string("localhost,127.0.0.1,::1"),
 				)),
-				Err(err) => {
-					tracing::warn!("代理地址无效，回退为直连: {err}");
+				None => {
+					tracing::warn!("代理地址无效，回退为直连");
 					builder.no_proxy()
 				}
 			}
@@ -559,6 +605,13 @@ enum FetchBody {
     File(DownloadedFile),
 }
 
+#[derive(Clone, Copy)]
+enum FetchTarget<'a> {
+    Memory,
+    DownloadBytes,
+    File(Option<&'a Path>),
+}
+
 /// Downloads and verifies a temporary file, which is removed when its last owner is dropped.
 pub async fn fetch_file(
     url: &str,
@@ -584,8 +637,7 @@ pub async fn fetch_file(
         exec,
         &INSECURE_REQWEST_CLIENT,
         progress,
-        true,
-        Some(staging),
+        FetchTarget::File(Some(staging)),
     )
     .await?;
     match body {
@@ -623,8 +675,7 @@ pub(crate) async fn fetch_file_mirrors_in(
             exec,
             &REQWEST_CLIENT,
             progress.as_deref_mut(),
-            true,
-            staging,
+            FetchTarget::File(staging),
         )
         .await;
         match body {
@@ -640,14 +691,15 @@ pub(crate) async fn fetch_file_mirrors_in(
 }
 
 async fn read_file_response(
-    response: reqwest::Response,
+    body: DownloadBody,
     mut progress: Option<&mut FetchProgressFn<'_>>,
+    progress_high_water: &mut u64,
     staging: Option<&Path>,
 ) -> crate::Result<DownloadedFile> {
     use futures::StreamExt;
     let (mut file, path) = temporary_file(staging).await?;
-    let total = response.content_length().unwrap_or(0);
-    let mut stream = response.bytes_stream();
+    let total = body.total.unwrap_or(0);
+    let mut stream = body.stream;
     let mut hasher = ContentHasher::default();
     let mut size = 0_u64;
     while let Some(chunk) =
@@ -657,9 +709,14 @@ async fn read_file_response(
         file.write_all(&chunk).await?;
         hasher.update(&chunk);
         size += chunk.len() as u64;
-        if let Some(progress) = progress.as_mut() {
-            progress(size, total).await?;
-        }
+        report_download_progress(
+            progress.as_deref_mut(),
+            None,
+            progress_high_water,
+            size,
+            total,
+        )
+        .await?;
     }
     file.sync_all().await?;
     drop(file);
@@ -701,7 +758,8 @@ async fn read_memory_response(
     response: reqwest::Response,
     url: &str,
     loading_bar: Option<(&LoadingBarId, f64)>,
-    mut progress: Option<&mut FetchProgressFn<'_>>,
+    progress: Option<&mut FetchProgressFn<'_>>,
+    progress_high_water: &mut u64,
 ) -> crate::Result<Bytes> {
     let total_size = response.content_length();
     if ((loading_bar.is_none() && progress.is_none()) || total_size.is_none())
@@ -713,9 +771,26 @@ async fn read_memory_response(
             format!("failed to read response body from {url}")
         });
     }
+    read_memory_body(
+        DownloadBody::sequential(response),
+        url,
+        loading_bar,
+        progress,
+        progress_high_water,
+    )
+    .await
+}
+
+async fn read_memory_body(
+    body: DownloadBody,
+    url: &str,
+    loading_bar: Option<(&LoadingBarId, f64)>,
+    mut progress: Option<&mut FetchProgressFn<'_>>,
+    progress_high_water: &mut u64,
+) -> crate::Result<Bytes> {
     use futures::StreamExt;
-    let total_size = total_size.unwrap_or(0);
-    let mut stream = response.bytes_stream();
+    let total_size = body.total.unwrap_or(0);
+    let mut stream = body.stream;
     let mut bytes = Vec::new();
     while let Some(chunk) =
         crate::install::control::download_step(stream.next()).await?
@@ -724,20 +799,39 @@ async fn read_memory_response(
             format!("failed to read response body from {url}")
         })?;
         bytes.extend_from_slice(&chunk);
-        if let Some((bar, total)) = loading_bar
-            && total_size > 0
-        {
-            emit_loading(
-                bar,
-                chunk.len() as f64 / total_size as f64 * total,
-                None,
-            )?;
-        }
-        if let Some(progress) = progress.as_mut() {
-            progress(bytes.len() as u64, total_size).await?;
-        }
+        report_download_progress(
+            progress.as_deref_mut(),
+            loading_bar,
+            progress_high_water,
+            bytes.len() as u64,
+            total_size,
+        )
+        .await?;
     }
     Ok(Bytes::from(bytes))
+}
+
+async fn report_download_progress(
+    progress: Option<&mut FetchProgressFn<'_>>,
+    loading_bar: Option<(&LoadingBarId, f64)>,
+    high_water: &mut u64,
+    current: u64,
+    total: u64,
+) -> crate::Result<()> {
+    if current <= *high_water {
+        return Ok(());
+    }
+    let delta = current - *high_water;
+    *high_water = current;
+    if let Some((bar, weight)) = loading_bar
+        && total > 0
+    {
+        emit_loading(bar, delta as f64 / total as f64 * weight, None)?;
+    }
+    if let Some(progress) = progress {
+        progress(current, total).await?;
+    }
+    Ok(())
 }
 
 #[tracing::instrument(skip(semaphore))]
@@ -760,32 +854,6 @@ pub async fn fetch(
         uri_path,
         semaphore,
         exec,
-    )
-    .await
-}
-
-#[tracing::instrument(skip(semaphore))]
-pub async fn fetch_with_client(
-    url: &str,
-    sha1: Option<&str>,
-    download_meta: Option<&DownloadMeta>,
-    uri_path: Option<&'static str>,
-    semaphore: &FetchSemaphore,
-    exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
-    client: &reqwest::Client,
-) -> crate::Result<Bytes> {
-    fetch_advanced_with_client(
-        Method::GET,
-        url,
-        sha1,
-        None,
-        None,
-        download_meta,
-        None,
-        uri_path,
-        semaphore,
-        exec,
-        client,
     )
     .await
 }
@@ -855,7 +923,7 @@ pub async fn fetch_advanced_bytes(
     semaphore: &FetchSemaphore,
     exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
 ) -> crate::Result<Bytes> {
-    fetch_advanced_with_client_and_progress(
+    fetch_advanced_with_body(
         method,
         url,
         None,
@@ -868,42 +936,39 @@ pub async fn fetch_advanced_bytes(
         semaphore,
         exec,
         &INSECURE_REQWEST_CLIENT,
-        None,
     )
     .await
 }
 
-#[tracing::instrument(skip(json_body, semaphore, progress))]
-#[allow(clippy::too_many_arguments)]
-pub async fn fetch_advanced_with_progress(
-    method: Method,
+/// Downloads an archive or other file whose caller requires its bytes.
+pub(crate) async fn fetch_download(
     url: &str,
-    sha1: Option<&str>,
-    json_body: Option<serde_json::Value>,
-    header: Option<(&str, &str)>,
-    download_meta: Option<&DownloadMeta>,
     loading_bar: Option<(&LoadingBarId, f64)>,
-    uri_path: Option<&'static str>,
     semaphore: &FetchSemaphore,
     exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
     progress: Option<&mut FetchProgressFn<'_>>,
 ) -> crate::Result<Bytes> {
-    fetch_advanced_with_client_and_progress(
-        method,
+    let body = fetch_advanced_with_target(
+        Method::GET,
         url,
-        sha1,
-        json_body,
         None,
-        header,
-        download_meta,
+        None,
+        None,
+        None,
+        None,
         loading_bar,
-        uri_path,
+        None,
         semaphore,
         exec,
         &INSECURE_REQWEST_CLIENT,
         progress,
+        FetchTarget::DownloadBytes,
     )
-    .await
+    .await?;
+    match body {
+        FetchBody::Memory(bytes) => Ok(bytes),
+        FetchBody::File(_) => unreachable!("requested an in-memory download"),
+    }
 }
 
 /// Downloads a file with retry and checksum functionality
@@ -922,7 +987,7 @@ pub async fn fetch_advanced_with_client(
     exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
     client: &reqwest::Client,
 ) -> crate::Result<Bytes> {
-    fetch_advanced_with_client_and_progress(
+    fetch_advanced_with_body(
         method,
         url,
         sha1,
@@ -935,16 +1000,13 @@ pub async fn fetch_advanced_with_client(
         semaphore,
         exec,
         client,
-        None,
     )
     .await
 }
 
-#[tracing::instrument(skip(
-    json_body, bytes_body, semaphore, client, progress
-))]
+#[tracing::instrument(skip(json_body, bytes_body, semaphore, client))]
 #[allow(clippy::too_many_arguments)]
-async fn fetch_advanced_with_client_and_progress(
+async fn fetch_advanced_with_body(
     method: Method,
     url: &str,
     sha1: Option<&str>,
@@ -957,7 +1019,6 @@ async fn fetch_advanced_with_client_and_progress(
     semaphore: &FetchSemaphore,
     exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
     client: &reqwest::Client,
-    progress: Option<&mut FetchProgressFn<'_>>,
 ) -> crate::Result<Bytes> {
     let body = fetch_advanced_with_target(
         method,
@@ -972,9 +1033,8 @@ async fn fetch_advanced_with_client_and_progress(
         semaphore,
         exec,
         client,
-        progress,
-        false,
         None,
+        FetchTarget::Memory,
     )
     .await?;
     match body {
@@ -997,8 +1057,7 @@ async fn fetch_advanced_with_target(
     exec: impl sqlx::Executor<'_, Database = sqlx::Sqlite>,
     client: &reqwest::Client,
     mut progress: Option<&mut FetchProgressFn<'_>>,
-    to_file: bool,
-    file_staging: Option<&Path>,
+    target: FetchTarget<'_>,
 ) -> crate::Result<FetchBody> {
     let _permit =
         crate::install::control::download_step(semaphore.0.acquire()).await??;
@@ -1019,6 +1078,10 @@ async fn fetch_advanced_with_target(
 
     let download_meta_header = download_meta
         .map(|m| (DOWNLOAD_META_HEADER.to_string(), m.to_header_value()));
+    let mut allow_ranges =
+        !is_api_url && !matches!(target, FetchTarget::Memory);
+    let mut attempted_segmented_download = false;
+    let mut progress_high_water = 0;
 
     for attempt in 1..=(FETCH_ATTEMPTS + 1) {
         if is_api_url {
@@ -1049,11 +1112,14 @@ async fn fetch_advanced_with_target(
             req = req.header("Authorization", &creds.session);
         }
 
-        if let Some((name, value)) = &download_meta_header {
+        if !attempted_segmented_download
+            && let Some((name, value)) = &download_meta_header
+        {
             tracing::debug!("Sending download analytics: {value}");
             req = req.header(name.as_str(), value.as_str());
         }
 
+        let range_request = allow_ranges.then(|| req.try_clone()).flatten();
         let result = crate::install::control::download_step(req.send()).await?;
         match result {
             Ok(resp) => {
@@ -1089,23 +1155,51 @@ async fn fetch_advanced_with_target(
                     return Err(backup_error.into());
                 }
 
-                let bytes = if to_file {
-                    read_file_response(
-                        resp,
-                        progress.as_deref_mut(),
-                        file_staging,
-                    )
-                    .await
-                    .map(FetchBody::File)
-                } else {
-                    read_memory_response(
+                let bytes = match target {
+                    FetchTarget::Memory => read_memory_response(
                         resp,
                         url,
                         loading_bar,
                         progress.as_deref_mut(),
+                        &mut progress_high_water,
                     )
                     .await
-                    .map(FetchBody::Memory)
+                    .map(FetchBody::Memory),
+                    target => {
+                        let body = match range_request {
+                            Some(request) => {
+                                allow_ranges = false;
+                                let body =
+                                    crate::install::control::download_step(
+                                        download_body(request, resp),
+                                    )
+                                    .await?;
+                                attempted_segmented_download =
+                                    body.is_segmented();
+                                body
+                            }
+                            None => DownloadBody::sequential(resp),
+                        };
+                        match target {
+                            FetchTarget::File(staging) => read_file_response(
+                                body,
+                                progress.as_deref_mut(),
+                                &mut progress_high_water,
+                                staging,
+                            )
+                            .await
+                            .map(FetchBody::File),
+                            _ => read_memory_body(
+                                body,
+                                url,
+                                loading_bar,
+                                progress.as_deref_mut(),
+                                &mut progress_high_water,
+                            )
+                            .await
+                            .map(FetchBody::Memory),
+                        }
+                    }
                 };
 
                 if let Ok(bytes) = bytes {
@@ -1168,16 +1262,27 @@ pub async fn fetch_mirrors(
     }
 
     for (index, mirror) in mirrors.iter().enumerate() {
-        let result = fetch_with_client(
+        let result = fetch_advanced_with_target(
+            Method::GET,
             mirror,
             sha1,
+            None,
+            None,
+            None,
             download_meta,
+            None,
             uri_path,
             semaphore,
             exec,
             &REQWEST_CLIENT,
+            None,
+            FetchTarget::DownloadBytes,
         )
-        .await;
+        .await
+        .map(|body| match body {
+            FetchBody::Memory(bytes) => bytes,
+            FetchBody::File(_) => unreachable!("requested an in-memory download"),
+        });
 
         if result.is_ok() || (result.is_err() && index == (mirrors.len() - 1)) {
             return result;
@@ -1323,6 +1428,35 @@ pub async fn sha1_file_async_with_progress(
 mod tests {
     use super::*;
     use chrono::{TimeDelta, Utc};
+
+    #[test]
+    fn manual_proxy_accepts_http_https_and_bare_host() {
+        let manual = |url: &str| ProxyConfig {
+            mode: ProxyMode::Manual,
+            url: Some(url.to_owned()),
+        };
+        let bare = manual("  localhost:7890  ").normalized().unwrap();
+        assert_eq!(bare.url.as_deref(), Some("localhost:7890"));
+        assert!(bare.same_route(&manual("http://localhost:7890/")));
+        assert!(manual("127.0.0.1:7890").normalized().is_some());
+        assert!(manual("https://proxy.example:8443").normalized().is_some());
+        assert!(!bare.same_route(&manual("https://localhost:7890")));
+    }
+
+    #[test]
+    fn proxy_validation_rejects_invalid_manual_addresses_and_clears_unused_urls() {
+        for address in [None, Some("  "), Some("http://"), Some("socks5://localhost:1080")] {
+            let config = ProxyConfig {
+                mode: ProxyMode::Manual,
+                url: address.map(str::to_owned),
+            };
+            assert!(config.normalized().is_none());
+        }
+        for mode in [ProxyMode::Auto, ProxyMode::Off] {
+            let config = ProxyConfig { mode, url: Some("localhost:7890".into()) };
+            assert!(config.normalized().unwrap().url.is_none());
+        }
+    }
 
     #[test]
     fn test_fence_block_after_4_fails() {

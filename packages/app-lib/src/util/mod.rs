@@ -1,5 +1,6 @@
 //! Theseus utility functions
 pub(crate) mod content_hash;
+pub(crate) mod download;
 pub mod fetch;
 pub mod io;
 pub mod jre;

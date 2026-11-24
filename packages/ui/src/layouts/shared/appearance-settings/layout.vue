@@ -8,6 +8,11 @@ import ProjectLayoutSelector from './components/ProjectLayoutSelector.vue'
 import { appearanceSettingsMessages as messages } from './messages'
 import { injectAppearanceSettings } from './providers'
 
+defineProps<{
+	themeDescription?: string
+	nativeDecorationsDescription?: string
+}>()
+
 const appearance = injectAppearanceSettings()
 const { formatMessage } = useVIntl()
 
@@ -16,8 +21,9 @@ const currentTheme = theme.current
 const themeOptions = theme.options
 const systemTheme = theme.system
 const preferredDarkTheme = theme.preferredDark
-const syncAcrossDevices = theme.syncAcrossDevices.value
-const syncDisabled = theme.syncAcrossDevices.disabled
+const themeSync = theme.syncAcrossDevices
+const syncAcrossDevices = themeSync?.value
+const syncDisabled = themeSync?.disabled
 const advancedRendering = appearance.advancedRendering.value
 const nativeDecorations = appearance.nativeDecorations
 const nativeDecorationsValue = nativeDecorations?.value
@@ -37,7 +43,7 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 					{{ formatMessage(messages.colorThemeTitle) }}
 				</h2>
 				<p class="m-0 text-secondary">
-					{{ formatMessage(messages.colorThemeDescription) }}
+					{{ themeDescription ?? formatMessage(messages.colorThemeDescription) }}
 				</p>
 			</div>
 
@@ -52,6 +58,7 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 			/>
 
 			<AppearanceSettingRow
+				v-if="themeSync"
 				class="mt-6"
 				control-id="sync-theme-across-devices"
 				:heading-level="3"
@@ -67,10 +74,10 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 					>
 						<Toggle
 							id="sync-theme-across-devices"
-							:model-value="syncDisabled ? false : syncAcrossDevices"
+							:model-value="!syncDisabled && Boolean(syncAcrossDevices)"
 							:disabled="syncDisabled"
 							:aria-labelledby="labelledBy"
-							@update:model-value="theme.syncAcrossDevices.update"
+							@update:model-value="themeSync?.update($event)"
 						/>
 					</span>
 				</template>
@@ -166,7 +173,9 @@ const sidebarPreferenceValues = sidebarPreferences?.value
 					v-if="nativeDecorations"
 					control-id="native-decorations"
 					:title="formatMessage(messages.nativeDecorationsTitle)"
-					:description="formatMessage(messages.nativeDecorationsDescription)"
+					:description="
+						nativeDecorationsDescription ?? formatMessage(messages.nativeDecorationsDescription)
+					"
 				>
 					<template #default="{ labelledBy }">
 						<Toggle

@@ -148,6 +148,10 @@ export async function backup_world(instance: string, world: string): Promise<num
 	return await invoke('plugin:worlds|backup_world', { instance, world })
 }
 
+export async function restore_world(instance: string, archive: string): Promise<string> {
+	return await invoke('plugin:worlds|restore_world', { instance, archive })
+}
+
 export async function delete_world(instance: string, world: string): Promise<void> {
 	return await invoke('plugin:worlds|delete_world', { instance, world })
 }

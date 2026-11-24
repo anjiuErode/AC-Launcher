@@ -36,6 +36,10 @@
 					"
 				/>
 				<div class="flex gap-2">
+					<Button type="outlined" size="lg" :disabled="worldBackupDisabled" @click="restoreWorld">
+						<FolderArchiveIcon class="size-5" />
+						{{ formatMessage(messages.restoreWorld) }}
+					</Button>
 					<Button type="outlined" size="lg" @click="addServerModal?.show()">
 						<PlusIcon class="size-5" />
 						{{ formatMessage(messages.addServer) }}
@@ -78,6 +82,8 @@
 					:supports-server-quick-play="supportsServerQuickPlay"
 					:supports-world-quick-play="supportsWorldQuickPlay"
 					:quarantined="instance.quarantined"
+					show-backup
+					:backup-disabled="worldBackupDisabled"
 					:current-protocol="protocolVersion"
 					:playing-instance="playing"
 					:playing-world="worldsMatch(world, worldPlaying)"
@@ -103,6 +109,7 @@
 					@delete="() => !isManagedServerWorld(world) && promptToRemoveWorld(world)"
 					@desync="() => world.type === 'server' && desyncServerModal?.show(world as ServerWorld)"
 					@open-folder="(world: SingleplayerWorld) => showWorldInFolder(instance.id, world.path)"
+					@backup="backupWorld"
 				/>
 			</div>
 		</div>
@@ -113,6 +120,10 @@
 			:description="formatMessage(messages.noWorldsDescription)"
 		>
 			<template #actions>
+				<Button type="outlined" size="lg" :disabled="worldBackupDisabled" @click="restoreWorld">
+					<FolderArchiveIcon class="size-5" />
+					{{ formatMessage(messages.restoreWorld) }}
+				</Button>
 				<Button type="outlined" size="lg" @click="addServerModal?.show()">
 					<PlusIcon class="size-5" />
 					{{ formatMessage(messages.addServer) }}
@@ -126,7 +137,13 @@
 	</ReadyTransition>
 </template>
 <script setup lang="ts">
-import { CompassIcon, PlusIcon, RefreshCwIcon, SearchIcon } from '@modrinth/assets'
+import {
+	CompassIcon,
+	FolderArchiveIcon,
+	PlusIcon,
+	RefreshCwIcon,
+	SearchIcon,
+} from '@modrinth/assets'
 import { Button } from '@modrinth/ui'
 import {
 	commonMessages,
@@ -142,6 +159,7 @@ import {
 	useVIntl,
 } from '@modrinth/ui'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { open } from '@tauri-apps/plugin-dialog'
 import { platform } from '@tauri-apps/plugin-os'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -159,6 +177,7 @@ import { get_project, get_project_v3 } from '@/helpers/cache.js'
 import { set_synced_option } from '@/helpers/instance'
 import { get_game_versions } from '@/helpers/tags'
 import {
+	backup_world,
 	delete_world,
 	desync_server,
 	type DesyncServerMode,
@@ -176,6 +195,7 @@ import {
 	refreshWorld,
 	remove_server_from_instance,
 	resolveManagedServerWorld,
+	restore_world,
 	type ServerData,
 	type ServerWorld,
 	showWorldInFolder,
@@ -199,6 +219,18 @@ const messages = defineMessages({
 	addServer: {
 		id: 'app.instance.worlds.add-server',
 		defaultMessage: 'Add server',
+	},
+	restoreWorld: {
+		id: 'app.instance.worlds.restore-world',
+		defaultMessage: 'Restore world',
+	},
+	backupComplete: {
+		id: 'app.instance.worlds.backup-complete',
+		defaultMessage: 'World backup saved to the instance backups folder',
+	},
+	restoreComplete: {
+		id: 'app.instance.worlds.restore-complete',
+		defaultMessage: 'World restored to {folder}',
 	},
 	browseServers: {
 		id: 'app.instance.worlds.browse-servers',
@@ -235,7 +267,7 @@ const messages = defineMessages({
 })
 
 const { formatMessage } = useVIntl()
-const { handleError } = injectNotificationManager()
+const { addNotification, handleError } = injectNotificationManager()
 const { playServerProject } = injectServerInstall()
 const route = useRoute()
 const instancePage = injectInstancePage()
@@ -274,6 +306,45 @@ const queryClient = useQueryClient()
 const refreshingAll = ref(false)
 const hadNoWorlds = ref(true)
 const startingInstance = ref(false)
+const worldBackupBusy = ref(false)
+const worldBackupDisabled = computed(
+	() =>
+		worldBackupBusy.value ||
+		playing.value ||
+		startingInstance.value ||
+		instance.value.quarantined ||
+		instance.value.install_stage !== 'installed',
+)
+
+async function backupWorld(world: SingleplayerWorld) {
+	if (worldBackupDisabled.value) return
+	worldBackupBusy.value = true
+	try {
+		await backup_world(instance.value.id, world.path)
+		addNotification({ type: 'success', title: formatMessage(messages.backupComplete) })
+	} catch (error) {
+		handleError(error)
+	} finally {
+		worldBackupBusy.value = false
+	}
+}
+
+async function restoreWorld() {
+	if (worldBackupDisabled.value) return
+	worldBackupBusy.value = true
+	try {
+		const archive = await open({ filters: [{ name: 'ZIP', extensions: ['zip'] }] })
+		if (!archive) return
+		const instanceId = instance.value.id
+		const folder = await restore_world(instanceId, archive)
+		await queryClient.invalidateQueries({ queryKey: instanceKeys.worlds(instanceId) })
+		addNotification({ type: 'success', title: formatMessage(messages.restoreComplete, { folder }) })
+	} catch (error) {
+		handleError(error)
+	} finally {
+		worldBackupBusy.value = false
+	}
+}
 const worldPlaying = ref<World>()
 
 const worldsQuery = useQuery(

@@ -3,6 +3,8 @@ import { ImportIcon, PlusIcon } from '@modrinth/assets'
 import { Button, defineMessages, IntlFormatted, useVIntl } from '@modrinth/ui'
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 
+import InstanceArchiveRestoreButton from '@/components/ui/InstanceArchiveRestoreButton.vue'
+
 import appIcon from '../../assets/branding/acl-badge.png'
 
 const showCreationModal = inject<() => void>('showCreationModal')
@@ -133,6 +135,7 @@ onUnmounted(() => {
 				<ImportIcon />
 				{{ formatMessage(messages.importFromLauncher) }}
 			</Button>
+			<InstanceArchiveRestoreButton size="lg" />
 		</div>
 	</div>
 </template>

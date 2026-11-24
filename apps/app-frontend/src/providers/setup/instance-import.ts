@@ -1,5 +1,6 @@
 import { type AbstractWebNotificationManager, provideInstanceImport } from '@modrinth/ui'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useRouter } from 'vue-router'
 
 import {
 	get_default_launcher_path,
@@ -9,6 +10,7 @@ import {
 
 export function setupInstanceImportProvider(notificationManager: AbstractWebNotificationManager) {
 	const { handleError } = notificationManager
+	const router = useRouter()
 
 	provideInstanceImport({
 		async getDetectedLaunchers() {
@@ -41,6 +43,9 @@ export function setupInstanceImportProvider(notificationManager: AbstractWebNoti
 		async selectDirectory() {
 			const result = await open({ multiple: false, directory: true })
 			return result?.toString() ?? null
+		},
+		openLauncherDirectoryImport() {
+			void router.push({ name: 'External launcher import' })
 		},
 	})
 }

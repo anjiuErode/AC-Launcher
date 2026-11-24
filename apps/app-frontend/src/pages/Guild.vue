@@ -13,10 +13,11 @@ import { Button, defineMessages, injectNotificationManager, Tabs, Toggle, useVIn
 import { renderString } from '@modrinth/utils/parse'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
-import { openUrl } from '@tauri-apps/plugin-opener'
 import type { Ref } from 'vue'
 import { computed, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+import { startExternalUrlDownload } from '@/components/ui/download-manager/external-file-downloads'
 import AddServerToInstanceModal from '@/components/ui/install_flow/AddServerToInstanceModal.vue'
 import ModalWrapper from '@/components/ui/modal/ModalWrapper.vue'
 import {
@@ -90,7 +91,8 @@ interface GuildPresence {
 const API_BASE = 'https://yingzhou1110.top'
 
 const { formatMessage } = useVIntl()
-const { session, busy, signIn, refresh } = useGuildSession()
+const { session, busy, loading: sessionLoading, readFailed: sessionReadFailed, signIn, refresh } =
+	useGuildSession()
 
 const me = ref<GuildMe | null>(null)
 const meError = ref<string | null>(null)
@@ -218,6 +220,10 @@ const messages = defineMessages({
 		id: 'app.guild.pack.download',
 		defaultMessage: 'Download',
 	},
+	downloadFailed: {
+		id: 'app.action-bar.install.summary.download-failed',
+		defaultMessage: "Download couldn't finish",
+	},
 	size: {
 		id: 'app.guild.pack.size',
 		defaultMessage: 'Size',
@@ -229,10 +235,6 @@ const messages = defineMessages({
 	attachmentTitle: {
 		id: 'app.guild.attachment.title',
 		defaultMessage: 'Attachments',
-	},
-	attachmentOpen: {
-		id: 'app.guild.attachment.open',
-		defaultMessage: 'Open in browser',
 	},
 	attachmentPreview: {
 		id: 'app.guild.attachment.preview',
@@ -265,11 +267,6 @@ const messages = defineMessages({
 	rejectTitle: {
 		id: 'app.guild.pack.reject-title',
 		defaultMessage: 'Cannot import this pack',
-	},
-	rejectCurseforge: {
-		id: 'app.guild.pack.reject-curseforge',
-		defaultMessage:
-			'This is a CurseForge export, which only lists mod IDs. Installing it requires the CurseForge API, which ACL does not use. Please use a .mrpack or a full instance archive instead.',
 	},
 	rejectBody: {
 		id: 'app.guild.pack.reject-body',
@@ -558,21 +555,19 @@ async function togglePreview(
 	}
 }
 
-/** 附件内容走官网公开下载地址，不需要令牌；图片直接内联，其余交给浏览器打开 */
+/** 附件走官网公开地址，下载和内联预览都不需要令牌。 */
 function attachmentUrl(announcement: GuildAnnouncement, attachment: GuildAttachment): string {
 	const newsId = encodeURIComponent(String(announcement.id))
 	const attachmentId = encodeURIComponent(String(attachment.id))
 	return `${API_BASE}/api/news/${newsId}/attachments/${attachmentId}`
 }
 
-async function openAttachment(
-	announcement: GuildAnnouncement,
-	attachment: GuildAttachment,
-): Promise<void> {
+async function saveGuildDownload(url: string, title: string, filename?: string): Promise<void> {
+	const failureMessage = formatMessage(messages.downloadFailed)
 	try {
-		await openUrl(attachmentUrl(announcement, attachment))
-	} catch (error) {
-		console.error('failed to open attachment', error)
+		await startExternalUrlDownload(new URL(url), failureMessage, filename)
+	} catch {
+		addNotification({ type: 'error', title: failureMessage, text: title })
 	}
 }
 
@@ -580,6 +575,7 @@ async function openAttachment(
 const installingPackId = ref<string | null>(null)
 const { addNotification } = injectNotificationManager()
 const appEvents = injectAppEvents()
+const router = useRouter()
 
 /**
  * 一键安装公会整合包：下载 → SHA256 校验 → 按格式分流。
@@ -611,10 +607,7 @@ async function installPack(pack: GuildPack): Promise<void> {
 
 /** 无法安装时的拒绝弹窗（对齐 PCL2：直接拒绝并说明，不让用户去猜版本） */
 const packRejectModal = ref()
-const rejectReason = ref<'unknown' | 'curseforge'>('unknown')
-
-function rejectPack(reason: 'unknown' | 'curseforge' = 'unknown'): void {
-	rejectReason.value = reason
+function rejectPack(): void {
 	packRejectModal.value?.show()
 }
 
@@ -633,6 +626,10 @@ async function runPackInstall(path: string, name: string, format = ''): Promise<
 		await install_create_modpack_instance({ type: 'fromFile', path })
 		return
 	}
+	if (kind === 'curseforge') {
+		await router.push({ name: 'CurseForge import', state: { archivePath: path } })
+		return
+	}
 
 	const inspection = await invoke<{
 		format: string
@@ -642,15 +639,8 @@ async function runPackInstall(path: string, name: string, format = ''): Promise<
 		root_prefix: string
 	}>('guild_inspect_pack', { path })
 
-	// CurseForge 导出包只给模组 ID，模组要走 CurseForge API 下载；
-	// 本项目未接入该 API，明确拒绝而不是"解压了 overrides 就当装好"。
-	if (inspection.format === 'curseforge') {
-		rejectPack('curseforge')
-		return
-	}
-
 	if (!inspection.mc_version || inspection.format === 'unknown') {
-		rejectPack('unknown')
+		rejectPack()
 		return
 	}
 
@@ -729,15 +719,6 @@ async function copyText(text: string, key: string): Promise<void> {
 		console.error('failed to copy', error)
 	}
 }
-
-async function openPack(pack: GuildPack): Promise<void> {
-	if (!pack.url) return
-	try {
-		await openUrl(pack.url)
-	} catch (error) {
-		console.error('failed to open download link', error)
-	}
-}
 </script>
 
 <template>
@@ -773,20 +754,25 @@ async function openPack(pack: GuildPack): Promise<void> {
 				v-if="!session"
 				class="flex flex-col items-center gap-3 rounded-2xl border border-solid border-surface-5 bg-bg-raised p-8 text-center"
 			>
-				<h2 class="m-0 text-lg font-bold text-contrast">
-					{{ formatMessage(messages.signedOutTitle) }}
-				</h2>
-				<p class="m-0 max-w-prose text-sm text-secondary">
-					{{ formatMessage(messages.signedOutDescription) }}
-				</p>
-				<Button :disabled="busy" @click="handleSignIn">
-					<SpinnerIcon v-if="busy" class="size-4 animate-spin" />
+				<h2 class="m-0 text-lg font-bold text-contrast" aria-live="polite">
 					{{
-						busy
-							? formatMessage(messages.waiting)
-							: formatMessage(messages.signIn)
+						formatMessage(
+							sessionLoading ? messages.loading : sessionReadFailed ? messages.unavailable : messages.signedOutTitle,
+						)
 					}}
+				</h2>
+				<Button v-if="sessionReadFailed && !sessionLoading" @click="handleRefresh">
+					{{ formatMessage(messages.retry) }}
 				</Button>
+				<template v-else-if="!sessionLoading">
+					<p class="m-0 max-w-prose text-sm text-secondary">
+						{{ formatMessage(messages.signedOutDescription) }}
+					</p>
+					<Button :disabled="busy" @click="handleSignIn">
+						<SpinnerIcon v-if="busy" class="size-4 animate-spin" />
+						{{ busy ? formatMessage(messages.waiting) : formatMessage(messages.signIn) }}
+					</Button>
+				</template>
 			</section>
 
 			<template v-else>
@@ -876,8 +862,12 @@ async function openPack(pack: GuildPack): Promise<void> {
 														: formatMessage(messages.attachmentPreview)
 												}}
 											</Button>
-											<Button size="sm" type="quiet" @click="openAttachment(item, att)">
-												{{ formatMessage(messages.attachmentOpen) }}
+											<Button
+												size="sm"
+												type="quiet"
+												@click="saveGuildDownload(attachmentUrl(item, att), att.name, att.name)"
+											>
+												{{ formatMessage(messages.download) }}
 											</Button>
 										</span>
 									</div>
@@ -979,7 +969,12 @@ async function openPack(pack: GuildPack): Promise<void> {
 											: formatMessage(messages.install)
 									}}
 								</Button>
-								<Button size="sm" type="outlined" :disabled="!pack.url" @click="openPack(pack)">
+								<Button
+									size="sm"
+									type="outlined"
+									:disabled="!pack.url"
+									@click="saveGuildDownload(pack.url, pack.name)"
+								>
 									{{ formatMessage(messages.download) }}
 								</Button>
 							</div>
@@ -1149,11 +1144,7 @@ async function openPack(pack: GuildPack): Promise<void> {
 		<ModalWrapper ref="packRejectModal" :header="formatMessage(messages.rejectTitle)">
 			<div class="flex max-w-[420px] flex-col gap-4">
 				<p class="m-0 text-sm text-secondary">
-					{{
-						rejectReason === 'curseforge'
-							? formatMessage(messages.rejectCurseforge)
-							: formatMessage(messages.rejectBody)
-					}}
+					{{ formatMessage(messages.rejectBody) }}
 				</p>
 				<div class="flex justify-end">
 					<Button @click="packRejectModal?.hide()">

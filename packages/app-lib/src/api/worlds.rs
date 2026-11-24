@@ -1,5 +1,5 @@
 use crate::data::ModLoader;
-use crate::instance::get_full_path;
+use crate::instance::{archive_io, get_full_path};
 use crate::launcher::get_loader_version_from_profile;
 use crate::server_address::{parse_server_address, resolve_server_address};
 use crate::state::attached_world_data::AttachedWorldData;
@@ -13,27 +13,21 @@ pub use crate::util::server_ping::{
 };
 use crate::util::{io, server_ping};
 use crate::{ErrorKind, Result, State, launcher};
-use anyhow::Context;
+use anyhow::{Context, ensure};
 use async_minecraft_ping::ServerDescription;
-use async_walkdir::WalkDir;
-use async_zip::{Compression, ZipEntryBuilder};
 use chrono::{DateTime, Local, TimeZone, Utc};
 use either::Either;
 use enumset::{EnumSet, EnumSetType};
 use fs4::tokio::AsyncFileExt;
-use futures::StreamExt;
 use quartz_nbt::{NbtCompound, NbtTag};
-use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::cmp::Reverse;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 use tokio::task::JoinSet;
-use tokio_util::compat::FuturesAsyncWriteCompatExt;
 use tracing::Instrument;
 use url::Url;
 
@@ -588,125 +582,227 @@ pub async fn reset_world_icon(instance: &Path, world: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn backup_world(instance: &Path, world: &str) -> Result<u64> {
-    let world_dir = get_world_dir(instance, world);
-    let _lock = get_world_session_lock(&world_dir).await?;
-    let backups_dir = instance.join("backups");
-
-    io::create_dir_all(&backups_dir).await?;
-
-    let name_base = {
-        let now = Local::now();
-        let formatted_time = now.format("%Y-%m-%d_%H-%M-%S");
-        format!("{formatted_time}_{world}")
-    };
-    let output_path =
-        backups_dir.join(find_available_name(&backups_dir, &name_base, ".zip"));
-
-    let writer = tokio::fs::File::create(&output_path).await?;
-    let mut writer = async_zip::tokio::write::ZipFileWriter::with_tokio(writer);
-
-    let mut walker = WalkDir::new(&world_dir);
-    while let Some(entry) = walker.next().await {
-        let entry = entry.map_err(|e| io::IOError::IOPathError {
-            path: e.path().unwrap().to_string_lossy().to_string(),
-            source: e.into_io().unwrap(),
-        })?;
-        if !entry.file_type().await?.is_file() {
-            continue;
-        }
-        if entry.file_name() == "session.lock" {
-            continue;
-        }
-        let zip_filename = format!(
-            "{world}/{}",
-            entry
-                .path()
-                .strip_prefix(&world_dir)?
-                .display()
-                .to_string()
-                .replace('\\', "/")
-        );
-        let mut stream = writer
-            .write_entry_stream(
-                ZipEntryBuilder::new(zip_filename.into(), Compression::Deflate)
-                    .build(),
-            )
-            .await?
-            .compat_write();
-        let mut source = tokio::fs::File::open(entry.path()).await?;
-        tokio::io::copy(&mut source, &mut stream).await?;
-        stream.into_inner().close().await?;
-    }
-
-    writer.close().await?;
-    Ok(io::metadata(output_path).await?.len())
+pub async fn backup_world(instance_id: &str, world: &str) -> Result<u64> {
+	let state = State::get().await?;
+	let _activity = state.instance_locks.lock_activity(instance_id).await;
+    let _content = state.instance_locks.lock_content(instance_id).await;
+	let instance = inactive_instance_folder(instance_id, &state).await?;
+	let world_path = archive_io::archive_path(world)?;
+	ensure!(world_path.components().count() == 1, "invalid world folder name");
+	let saves = instance.join("saves");
+	archive_io::checked_dir(&saves)?;
+	let world_dir = saves.join(world_path);
+	archive_io::checked_dir(&world_dir)?;
+	match tokio::fs::symlink_metadata(world_dir.join("session.lock")).await {
+		Ok(info) => ensure!(
+			info.is_file() && !archive_io::path_is_link(&info),
+			"invalid world session lock"
+		),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+		Err(error) => return Err(error.into()),
+	}
+	let _lock = try_get_world_session_lock(&world_dir).await?
+		.context("the world is already locked by Minecraft")?;
+	let backups = instance.join("backups");
+	io::create_dir_all(&backups).await?;
+	archive_io::checked_dir(&backups)?;
+	let time = Local::now().format("%Y-%m-%d_%H-%M-%S");
+	let name = format!("{time}_{world}");
+	let world = world.to_owned();
+	tokio::task::spawn_blocking(move || {
+		let output = backups.join(available_world_name(&backups, &name, ".zip")?);
+		archive_io::write_archive(&output, |zip| {
+			archive_io::write_tree(zip, &world_dir, &world)
+		})
+	})
+	.await?
 }
 
-fn find_available_name(dir: &Path, file_name: &str, extension: &str) -> String {
-    static RESERVED_WINDOWS_FILENAMES: LazyLock<Regex> = LazyLock::new(|| {
-        RegexBuilder::new(r#"^.*\.|(?:COM|CLOCK\$|CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$"#)
-            .case_insensitive(true)
-            .build()
-            .unwrap()
-    });
-    static COPY_COUNTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-        RegexBuilder::new(r#"^(?<name>.*) \((?<count>\d*)\)$"#)
-            .case_insensitive(true)
-            .unicode(true)
-            .build()
-            .unwrap()
-    });
-
-    let mut file_name = file_name.replace(
-        [
-            '/', '\n', '\r', '\t', '\0', '\x0c', '`', '?', '*', '\\', '<', '>',
-            '|', '"', ':', '.', '/', '"',
-        ],
-        "_",
-    );
-    if RESERVED_WINDOWS_FILENAMES.is_match(&file_name) {
-        file_name.insert(0, '_');
-        file_name.push('_');
+pub(crate) async fn install_datapack_in_world(
+    instance: &Path,
+    world: &str,
+    source: &Path,
+) -> Result<String> {
+    let name = archive_io::archive_path(world)?;
+    ensure!(name.components().count() == 1, "invalid world folder name");
+    let file_name = source.file_name().and_then(|name| name.to_str())
+        .context("invalid data pack filename")?;
+    let relative = format!("saves/{world}/datapacks/{file_name}");
+    archive_io::checked_dir(instance)?;
+    let saves = instance.join("saves");
+    archive_io::checked_dir(&saves)?;
+    let world = saves.join(name);
+    archive_io::checked_dir(&world)?;
+    let level = tokio::fs::symlink_metadata(world.join("level.dat")).await?;
+    ensure!(level.is_file() && !archive_io::path_is_link(&level), "invalid local Minecraft world");
+    match tokio::fs::symlink_metadata(world.join("session.lock")).await {
+        Ok(lock) => ensure!(lock.is_file() && !archive_io::path_is_link(&lock), "invalid world session lock"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
-
-    let mut count = 0;
-    if let Some(find) = COPY_COUNTER_PATTERN.captures(&file_name) {
-        count = find
-            .name("count")
-            .unwrap()
-            .as_str()
-            .parse::<i32>()
-            .unwrap_or(0);
-        let end = find.name("name").unwrap().end();
-        drop(find);
-        file_name.truncate(end);
+    let _session = try_get_world_session_lock(&world).await?
+        .context("the world is already locked by Minecraft")?;
+    let directory = world.join("datapacks");
+    match tokio::fs::create_dir(&directory).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.into()),
     }
+    archive_io::checked_dir(&directory)?;
+    let destination = directory.join(file_name);
+    let source = source.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let mut input = std::fs::File::open(source)?;
+        let mut temp = tempfile::NamedTempFile::new_in(directory)?;
+        std::io::copy(&mut input, &mut temp)?;
+        temp.as_file().sync_all()?;
+        temp.persist_noclobber(destination).map_err(|error| error.error)?;
+        Ok::<_, crate::Error>(())
+    }).await??;
+    Ok(relative)
+}
 
-    if file_name.len() > 255 - extension.len() {
-        file_name.truncate(255 - extension.len());
-    }
+pub async fn restore_world(instance_id: &str, archive: &Path) -> Result<String> {
+	let state = State::get().await?;
+	let _activity = state.instance_locks.lock_activity(instance_id).await;
+    let _content = state.instance_locks.lock_content(instance_id).await;
+	let instance = inactive_instance_folder(instance_id, &state).await?;
+	restore_world_into_folder(&instance, archive).await
+}
 
-    let mut current_attempt = file_name.clone();
-    loop {
-        if count != 0 {
-            let with_count = format!(" ({count})");
-            if file_name.len() > 255 - with_count.len() {
-                current_attempt.truncate(255 - with_count.len());
-            }
-            current_attempt.push_str(&with_count);
-        }
+async fn restore_world_into_folder(instance: &Path, archive: &Path) -> Result<String> {
+	let saves = instance.join("saves");
+	let instance = instance.to_owned();
+	let archive = archive.to_owned();
+	let stage = tokio::task::spawn_blocking(move || {
+		let staging = tempfile::Builder::new().prefix(".acl-world-").tempdir_in(instance)?;
+		archive_io::extract_archive(&archive, staging.path())?;
+		let (path, name) = if staging.path().join("level.dat").is_file() {
+			let name = archive.file_stem().and_then(|name| name.to_str()).unwrap_or("Restored world");
+			(staging.path().to_owned(), name.to_owned())
+		} else {
+			let mut entries = std::fs::read_dir(staging.path())?;
+			let entry = entries.next().context("world backup is empty")??;
+			ensure!(entries.next().is_none(), "world backup must contain exactly one world");
+			archive_io::checked_dir(&entry.path())?;
+			(entry.path(), entry.file_name().to_string_lossy().into_owned())
+		};
+		Ok::<_, crate::Error>((staging, path, name))
+	})
+	.await??;
+	let (_staging, path, name) = stage;
+	let level = path.join("level.dat");
+	ensure!(tokio::fs::metadata(&level).await?.len() <= 16 * 1024 * 1024, "world metadata is too large");
+	read_singleplayer_world_maybe_locked(path.clone(), false).await?;
+	io::create_dir_all(&saves).await?;
+	archive_io::checked_dir(&saves)?;
+	let name = available_world_name(&saves, &name, "")?;
+	tokio::fs::rename(path, saves.join(&name)).await?;
+	Ok(name)
+}
 
-        current_attempt.push_str(extension);
+async fn inactive_instance_folder(instance_id: &str, state: &State) -> Result<PathBuf> {
+	let metadata = crate::state::get_instance(instance_id, &state.pool)
+		.await?
+		.context("unknown instance")?;
+	ensure!(
+		!metadata.quarantined && metadata.instance.install_stage == InstanceInstallStage::Installed,
+		"the instance is unavailable for world backup or restore"
+	);
+	ensure!(
+		!crate::state::instance_has_running_process(instance_id, state).await?,
+		"stop Minecraft before backing up or restoring a world"
+	);
+	let path = state.directories.instances_dir().join(metadata.instance.path);
+	archive_io::checked_dir(&path)?;
+	Ok(path)
+}
 
-        let result = dir.join(&current_attempt);
-        if !result.exists() {
-            return current_attempt;
-        }
+fn available_world_name(parent: &Path, name: &str, extension: &str) -> Result<String> {
+	let sanitized = name.replace(['/', '\\', ':', '<', '>', '"', '|', '?', '*'], "_");
+	let sanitized = sanitized.trim_end_matches([' ', '.']);
+	let base = if sanitized.is_empty() || archive_io::archive_path(sanitized).is_err() {
+		"Restored world"
+	} else {
+		sanitized
+	};
+	let names = std::fs::read_dir(parent)?
+		.map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().to_uppercase()))
+		.collect::<std::io::Result<std::collections::HashSet<_>>>()?;
+	for index in 0.. {
+		let suffix = if index == 0 { String::new() } else { format!(" ({index})") };
+		let budget = 255 - suffix.len() - extension.len();
+		let mut units = 0;
+		let stem: String = base.chars().take_while(|character| {
+			units += character.len_utf16();
+			units <= budget
+		}).collect();
+		let name = format!("{}{suffix}{extension}", stem.trim_end_matches([' ', '.']));
+		if !names.contains(&name.to_uppercase()) {
+			return Ok(name);
+		}
+	}
+	unreachable!()
+}
 
-        count += 1;
-        current_attempt.replace_range(..current_attempt.len(), &file_name);
-    }
+#[cfg(test)]
+mod backup_tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn curseforge_datapack_installs_in_selected_world_without_overwriting() -> Result<()> {
+		let instance = tempfile::tempdir()?;
+		let downloads = tempfile::tempdir()?;
+		let selected = instance.path().join("saves/Selected");
+		let other = instance.path().join("saves/Other");
+		std::fs::create_dir_all(&selected)?;
+		std::fs::create_dir_all(&other)?;
+		std::fs::write(selected.join("level.dat"), b"selected")?;
+		std::fs::write(other.join("level.dat"), b"other")?;
+		let source = downloads.path().join("adventure.zip");
+		std::fs::write(&source, b"first version")?;
+		assert_eq!(
+			install_datapack_in_world(instance.path(), "Selected", &source).await?,
+			"saves/Selected/datapacks/adventure.zip"
+		);
+		std::fs::write(&source, b"second version")?;
+		assert!(install_datapack_in_world(instance.path(), "Selected", &source).await.is_err());
+		assert_eq!(std::fs::read(selected.join("datapacks/adventure.zip"))?, b"first version");
+		assert_eq!(std::fs::read(selected.join("level.dat"))?, b"selected");
+		assert_eq!(std::fs::read(other.join("level.dat"))?, b"other");
+		assert!(!other.join("datapacks").exists());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn restores_world_to_new_folder_and_validates_metadata() -> Result<()> {
+		let target = tempfile::tempdir()?;
+		let archives = tempfile::tempdir()?;
+		let saves = target.path().join("saves");
+		std::fs::create_dir_all(saves.join("Sample"))?;
+		std::fs::write(saves.join("Sample/level.dat"), b"existing world")?;
+
+		let archive = archives.path().join("world.zip");
+		let invalid = archives.path().join("invalid.zip");
+		let mut data = NbtCompound::new();
+		data.insert("LevelName", "Sample");
+		let mut root = NbtCompound::new();
+		root.insert("Data", data);
+		let mut level = Vec::new();
+		quartz_nbt::io::write_nbt(&mut level, None, &root, quartz_nbt::io::Flavor::GzCompressed)?;
+		archive_io::write_archive(&archive, |zip| {
+			archive_io::write_bytes(zip, "Sample/level.dat", &level)?;
+			archive_io::write_bytes(zip, "Sample/region/r.0.0.mca", b"synthetic region")
+		})?;
+		archive_io::write_archive(&invalid, |zip| archive_io::write_bytes(zip, "Invalid/level.dat", b"invalid world"))?;
+
+		assert_eq!(restore_world_into_folder(target.path(), &archive).await?, "Sample (1)");
+		assert_eq!(std::fs::read(saves.join("Sample/level.dat"))?, b"existing world");
+		assert_eq!(std::fs::read(saves.join("Sample (1)/region/r.0.0.mca"))?, b"synthetic region");
+		assert!(restore_world_into_folder(target.path(), &invalid).await.is_err());
+		assert!(!saves.join("Invalid").exists());
+		Ok(())
+	}
 }
 
 pub async fn delete_world(instance: &Path, world: &str) -> Result<()> {

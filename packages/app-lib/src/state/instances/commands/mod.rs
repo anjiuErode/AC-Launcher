@@ -21,7 +21,7 @@ mod list_content;
 pub(crate) use self::list_content::{
     dependencies_to_content_items, get_content_projects,
     get_installed_project_ids_for_instance, get_instance_install_candidates,
-    get_linked_modpack_info, list_content, list_content_sets,
+    get_linked_modpack_info, list_content, list_content_sets, list_file_manager_content,
     list_indexed_content, list_linked_modpack_content, list_pack_content,
 };
 
@@ -48,8 +48,9 @@ pub(crate) use self::apply_content_install::*;
 
 mod content_mutation;
 pub(crate) use self::content_mutation::{
-    ContentOrigin, InstallContent, install_stored_file, remove_project,
-    toggle_disable_project,
+    ContentOrigin, InstallContent, install_stored_file, install_stored_file_if_absent,
+    install_stored_file_if_absent_after,
+    remove_project, toggle_disable_project,
 };
 
 mod check_content_updates;

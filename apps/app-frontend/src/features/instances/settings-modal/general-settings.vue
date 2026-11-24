@@ -2,6 +2,7 @@
 import {
 	CopyIcon,
 	EditIcon,
+	FolderArchiveIcon,
 	PaletteIcon,
 	SpinnerIcon,
 	TrashIcon,
@@ -18,7 +19,7 @@ import {
 	useVIntl,
 } from '@modrinth/ui'
 import { useQueryClient } from '@tanstack/vue-query'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import { computed, type Ref, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -26,12 +27,18 @@ import IconEditorModal from '@/components/ui/instance_settings/icon-editor-modal
 import ConfirmDeleteInstanceModal from '@/components/ui/modal/ConfirmDeleteInstanceModal.vue'
 import { trackEvent } from '@/helpers/analytics'
 import { install_duplicate_instance } from '@/helpers/install'
-import { edit, edit_icon, getInstanceIconUrl, remove } from '@/helpers/instance'
+import {
+	edit,
+	edit_icon,
+	exportInstanceArchive,
+	getInstanceIconUrl,
+	remove,
+} from '@/helpers/instance'
 import type { GameInstance, InstanceIconConfig } from '@/helpers/types'
 
 import { injectInstanceSettings } from './instance-settings-context'
 
-const { handleError } = injectNotificationManager()
+const { addNotification, handleError } = injectNotificationManager()
 const { formatMessage } = useVIntl()
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -53,6 +60,7 @@ const releaseChannelDisabledItems = computed<ReleaseChannel[]>(() =>
 )
 
 const installing = computed(() => instance.value.install_stage !== 'installed')
+const exportingArchive = ref(false)
 
 watch(
 	() => [instance.value.id, instance.value.icon_path, instance.value.icon_config] as const,
@@ -68,6 +76,26 @@ async function duplicateInstance() {
 		loader: instance.value.loader,
 		game_version: instance.value.game_version,
 	})
+}
+
+async function exportArchive() {
+	if (exportingArchive.value || installing.value || instance.value.quarantined) return
+	exportingArchive.value = true
+	try {
+		const { id, name } = instance.value
+		const fileName = name.replace(/[<>:"/\\|?*]/g, '_').replace(/[. ]+$/, '') || 'Instance'
+		const output = await save({
+			defaultPath: `${fileName}.acl-instance.zip`,
+			filters: [{ name: 'ACL ZIP', extensions: ['zip'] }],
+		})
+		if (!output) return
+		await exportInstanceArchive(id, output)
+		addNotification({ type: 'success', title: formatMessage(messages.archiveExported) })
+	} catch (error) {
+		handleError(error)
+	} finally {
+		exportingArchive.value = false
+	}
 }
 
 function formatReleaseChannelLabel(channel: ReleaseChannel) {
@@ -192,6 +220,23 @@ async function removeInstance() {
 }
 
 const messages = defineMessages({
+	archiveExport: {
+		id: 'app.instance.archive.export',
+		defaultMessage: 'Export instance archive',
+	},
+	archiveExporting: {
+		id: 'app.instance.archive.exporting',
+		defaultMessage: 'Exporting instance…',
+	},
+	archiveExported: {
+		id: 'app.instance.archive.exported',
+		defaultMessage: 'Instance archive saved',
+	},
+	archiveDescription: {
+		id: 'app.instance.archive.description',
+		defaultMessage:
+			'Save worlds, settings, mods, and resource files together. Close Minecraft before exporting.',
+	},
 	name: {
 		id: 'instance.settings.tabs.general.name',
 		defaultMessage: 'Name',
@@ -393,6 +438,18 @@ const messages = defineMessages({
 				<p class="m-0">
 					{{ formatMessage(messages.duplicateInstanceDescription) }}
 				</p>
+			</div>
+			<div class="flex flex-col gap-2.5 mt-6">
+				<Button
+					:disabled="exportingArchive || instance.quarantined"
+					class="w-fit"
+					@click="exportArchive"
+				>
+					<SpinnerIcon v-if="exportingArchive" class="animate-spin" />
+					<FolderArchiveIcon v-else />
+					{{ formatMessage(exportingArchive ? messages.archiveExporting : messages.archiveExport) }}
+				</Button>
+				<p class="m-0">{{ formatMessage(messages.archiveDescription) }}</p>
 			</div>
 		</template>
 		<div class="flex flex-col gap-2.5 mt-6">

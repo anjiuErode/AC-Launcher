@@ -51,6 +51,18 @@ export default new createRouter({
 			],
 		},
 		{
+			path: '/import/launcher',
+			name: 'External launcher import',
+			component: () => import('@/pages/ExternalImport.vue'),
+			props: { mode: 'launcher' },
+		},
+		{
+			path: '/import/curseforge',
+			name: 'CurseForge import',
+			component: () => import('@/pages/ExternalImport.vue'),
+			props: { mode: 'curseforge' },
+		},
+		{
 			path: '/browse/:projectType',
 			name: 'Discover content',
 			component: () => import('@/pages/Browse.vue'),

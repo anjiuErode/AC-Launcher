@@ -36,6 +36,49 @@ export async function get_many(instanceIds: string[]): Promise<GameInstance[]> {
 	return await invoke('plugin:instance|instance_get_many', { instanceIds })
 }
 
+export async function exportInstanceArchive(instanceId: string, output: string): Promise<void> {
+	return await invoke('plugin:instance|instance_export_archive', { instanceId, output })
+}
+
+export async function restoreInstanceArchive(archive: string): Promise<string> {
+	return await invoke('plugin:instance|instance_restore_archive', { archive })
+}
+
+export type VersionSwitchContent = {
+	path: string
+	name: string
+	issue: 'game_version' | 'mod_loader' | 'unverified'
+	can_disable: boolean
+}
+
+export async function previewInstanceVersionSwitch(
+	instanceId: string,
+	gameVersion: string,
+	loader: string,
+): Promise<VersionSwitchContent[]> {
+	return await invoke('plugin:instance|instance_preview_version_switch', {
+		instanceId,
+		gameVersion,
+		loader,
+	})
+}
+
+export async function switchInstanceVersion(
+	instanceId: string,
+	gameVersion: string,
+	loader: string,
+	loaderVersion: string | null,
+	disableMods: string[],
+): Promise<InstallJobSnapshot> {
+	return await invoke('plugin:instance|instance_switch_version', {
+		instanceId,
+		gameVersion,
+		loader,
+		loaderVersion,
+		disableMods,
+	})
+}
+
 export async function get_projects(
 	instanceId: string,
 	cacheBehaviour?: CacheBehaviour,
@@ -85,6 +128,11 @@ export async function get_content_items(
 		instanceId,
 		cacheBehaviour,
 	})
+	return adaptContentItems(items)
+}
+
+export async function get_file_manager_content(instanceId: string): Promise<ContentItem[]> {
+	const items = await invoke<ContentItem[]>('plugin:instance|instance_get_file_manager_content', { instanceId })
 	return adaptContentItems(items)
 }
 

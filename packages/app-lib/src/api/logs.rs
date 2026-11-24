@@ -2,6 +2,7 @@ use std::fmt::Write as _;
 use std::io::{BufRead, SeekFrom};
 use std::time::SystemTime;
 
+pub use crate::state::LaunchDiagnostic;
 use anyhow::bail;
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,17 @@ pub struct LatestLogCursor {
 #[serde(transparent)]
 pub struct CensoredString(String);
 impl CensoredString {
+    fn censor_with_external(
+        mut text: String,
+        credentials: &[Credentials],
+        external_tokens: &[String],
+    ) -> Self {
+        for token in external_tokens.iter().filter(|token| !token.is_empty()) {
+            text = text.replace(token, "{MINECRAFT_ACCESS_TOKEN}");
+        }
+        Self::censor(text, credentials)
+    }
+
     pub fn censor(mut s: String, credentials_list: &[Credentials]) -> Self {
         let username = whoami::username();
         s = s
@@ -379,6 +391,7 @@ async fn get_output_by_filename_from_path(
     };
 
     let path = logs_folder.join(file_name);
+    let external_tokens = crate::minecraft_auth::external_logging_tokens(&state.pool).await?;
 
     let credentials = Credentials::get_all(&state.pool)
         .await?
@@ -396,7 +409,7 @@ async fn get_output_by_filename_from_path(
             let compacted = read_compacted_log(&mut reader)
                 .map_err(|e| IOError::with_path(e, &path))?;
             maybe_emit_log_compaction_warning(file_name, compacted.stats).await;
-            return Ok(CensoredString::censor(compacted.output, &credentials));
+            return Ok(CensoredString::censor_with_external(compacted.output, &credentials, &external_tokens));
         } else if ext == "log" || ext == "txt" {
             let file = std::fs::File::open(&path)
                 .map_err(|e| IOError::with_path(e, &path))?;
@@ -404,7 +417,7 @@ async fn get_output_by_filename_from_path(
             let compacted = read_compacted_log(&mut reader)
                 .map_err(|e| IOError::with_path(e, &path))?;
             maybe_emit_log_compaction_warning(file_name, compacted.stats).await;
-            return Ok(CensoredString::censor(compacted.output, &credentials));
+            return Ok(CensoredString::censor_with_external(compacted.output, &credentials, &external_tokens));
         }
     }
     bail!("file extension not supported {}", path.display())
@@ -549,7 +562,8 @@ pub async fn get_generic_live_log_cursor(
         .map(|x| x.1)
         .collect::<Vec<_>>();
     maybe_emit_log_compaction_warning(log_file_name, compacted.stats).await;
-    let output = CensoredString::censor(compacted.output, &credentials);
+    let external_tokens = crate::minecraft_auth::external_logging_tokens(&state.pool).await?;
+    let output = CensoredString::censor_with_external(compacted.output, &credentials, &external_tokens);
     Ok(LatestLogCursor {
         cursor,
         new_file,

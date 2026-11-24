@@ -29,7 +29,7 @@ fn normalized(path: &str) -> &str {
     path.trim_start_matches('/')
 }
 
-async fn resolve(
+pub(super) async fn resolve(
     state: &State,
     instance_id: &str,
     path: &str,
@@ -244,7 +244,17 @@ pub async fn list_instance_files(
 ) -> crate::Result<Vec<InstanceFileItem>> {
     let state = State::get().await?;
     let directory = resolve(&state, instance_id, path, false).await?;
-    let mut entries = fs::read_dir(directory.path()).await?;
+    let entries = fs::read_dir(directory.path()).await;
+    let mut entries = match entries {
+        Ok(entries) => entries,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(normalized(path), "resourcepacks" | "shaderpacks") =>
+        {
+            return Ok(Vec::new());
+        }
+        Err(error) => return Err(error.into()),
+    };
     let mut output = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();

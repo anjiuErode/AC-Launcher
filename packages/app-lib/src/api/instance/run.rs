@@ -1,5 +1,7 @@
 use super::content::get_projects;
 use crate::ErrorKind;
+use crate::launcher::GameLaunchIdentity;
+use crate::minecraft_auth::{active_alternate_id, external_launch_identity, offline_account};
 use crate::server_address::ServerAddress;
 use crate::state::{
     Credentials, InstanceLink, ProcessMetadata, Settings, State,
@@ -27,6 +29,7 @@ pub async fn run(
     quick_play_type: QuickPlayType,
 ) -> crate::Result<ProcessMetadata> {
     let state = State::get().await?;
+    let _activity = state.instance_locks.lock_activity(instance_id).await;
     if crate::state::instances::adapters::sqlite::instance_rows::is_instance_quarantined(
         instance_id,
         &state.pool,
@@ -53,17 +56,50 @@ pub async fn run(
     )
     .await?;
 
-    let default_account = Credentials::get_default_credential(&state.pool)
-        .await?
-        .ok_or(ErrorKind::NotLoggedIn)?;
-
-    run_credentials(instance_id, &default_account, quick_play_type).await
+    state.process_manager.clear_launch_diagnostic(instance_id);
+    let result = if let Some(id) = active_alternate_id(&state.pool).await? {
+        let identity = if let Some(profile) = offline_account(&state.pool, id).await? {
+            GameLaunchIdentity {
+                name: profile.name,
+                uuid: profile.id,
+                access_token: "0".to_string(),
+                user_type: "legacy",
+                authlib_jvm_args: Vec::new(),
+            }
+        } else {
+            external_launch_identity(id, &state).await?.ok_or(ErrorKind::NotLoggedIn)?
+        };
+        run_with_account(instance_id, identity, None, quick_play_type).await
+    } else {
+        let account = Credentials::get_default_credential(&state.pool)
+            .await?
+            .ok_or(ErrorKind::NotLoggedIn)?;
+        let profile = account.maybe_online_profile().await;
+        run_with_account(
+            instance_id,
+            GameLaunchIdentity {
+                name: profile.name.clone(),
+                uuid: profile.id,
+                access_token: account.access_token.clone(),
+                user_type: "msa",
+                authlib_jvm_args: Vec::new(),
+            },
+            Some(&account),
+            quick_play_type,
+        )
+        .await
+    };
+    if let Err(error) = &result {
+        state.process_manager.record_launch_error(instance_id, error);
+    }
+    result
 }
 
-#[tracing::instrument(skip(credentials))]
-async fn run_credentials(
+#[tracing::instrument(skip(identity, microsoft_account))]
+async fn run_with_account(
     instance_id: &str,
-    credentials: &Credentials,
+    identity: GameLaunchIdentity,
+    microsoft_account: Option<&Credentials>,
     quick_play_type: QuickPlayType,
 ) -> crate::Result<ProcessMetadata> {
     let state = State::get().await?;
@@ -237,7 +273,8 @@ async fn run_credentials(
         mc_set_options.push(("fullscreen".to_string(), "true".to_string()));
     }
 
-    if let Some(project_id) = server_play_project_id(&context.link)
+    if let Some(credentials) = microsoft_account
+        && let Some(project_id) = server_play_project_id(&context.link)
         && !project_id.trim().is_empty()
     {
         let server_id = uuid::Uuid::new_v4().to_string();
@@ -286,7 +323,9 @@ async fn run_credentials(
         }
     }
 
-    crate::minecraft_skins::flush_pending_skin_change().await?;
+    if microsoft_account.is_some() {
+        crate::minecraft_skins::flush_pending_skin_change().await?;
+    }
     crate::launcher::launch_minecraft(
         &java_args,
         &launch_env_args,
@@ -294,7 +333,7 @@ async fn run_credentials(
         &wrapper,
         &memory,
         &resolution,
-        credentials,
+        &identity,
         post_exit_hook,
         &context,
         quick_play_type,

@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import type { Labrinth } from '@modrinth/api-client'
+import { FolderArchiveIcon, SpinnerIcon } from '@modrinth/assets'
 import {
+	Button,
+	Checkbox,
 	commonMessages,
 	defineMessages,
 	formatLoaderLabel,
 	injectFilePicker,
 	injectNotificationManager,
 	InstallationSettingsLayout,
+	NewModal,
 	provideInstallationSettings,
 	useDebugLogger,
 	useVIntl,
 } from '@modrinth/ui'
 import type { GameVersionTag, PlatformTag } from '@modrinth/utils'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { save } from '@tauri-apps/plugin-dialog'
+import { computed, onBeforeUnmount, ref, useTemplateRef } from 'vue'
 
 import { useManagedContentPolicy } from '@/composables/instances/use-managed-content-policy'
 import { useAppSettings } from '@/composables/use-app-settings.ts'
@@ -26,7 +31,10 @@ import {
 } from '@/helpers/install'
 import {
 	edit,
+	exportInstanceArchive,
 	get_linked_modpack_info,
+	previewInstanceVersionSwitch,
+	switchInstanceVersion,
 	unlink_shared_instance,
 	update_managed_modrinth_version,
 	update_repair_modrinth,
@@ -39,9 +47,10 @@ import { injectAppEvents } from '@/providers/app-events'
 import { provideInstanceBackup } from '@/providers/instance-backup'
 
 import { injectInstanceSettings } from './instance-settings-context.ts'
+import OptiFineInstallationSettings from './optifine-installation-settings.vue'
 import SharedInstanceInstallationSettingsControls from './shared-instance-installation-settings-controls.vue'
 
-const { handleError } = injectNotificationManager()
+const { addNotification, handleError } = injectNotificationManager()
 const appEvents = injectAppEvents()
 const filePicker = injectFilePicker()
 const { formatMessage } = useVIntl()
@@ -170,7 +179,113 @@ const messages = defineMessages({
 		id: 'instance.settings.tabs.installation.locked',
 		defaultMessage: 'Installation settings are unavailable while this instance is locked.',
 	},
+	switchTitle: {
+		id: 'app.instance.version-switch.title',
+		defaultMessage: 'Change Minecraft installation',
+	},
+	switchDescription: {
+		id: 'app.instance.version-switch.description',
+		defaultMessage:
+			'Install Minecraft {version} with {loader}. Review these files before switching.',
+	},
+	switchNoIssues: {
+		id: 'app.instance.version-switch.no-issues',
+		defaultMessage: 'No compatibility issues were found in the indexed content.',
+	},
+	switchGameMismatch: {
+		id: 'app.instance.version-switch.game-mismatch',
+		defaultMessage: 'Requires a version that supports this Minecraft release',
+	},
+	switchLoaderMismatch: {
+		id: 'app.instance.version-switch.loader-mismatch',
+		defaultMessage: 'Requires a version that supports this mod loader',
+	},
+	switchUnknown: {
+		id: 'app.instance.version-switch.unknown',
+		defaultMessage: 'Compatibility requires a manual check',
+	},
+	switchAutoDisable: {
+		id: 'app.instance.version-switch.auto-disable',
+		defaultMessage: 'Disable incompatible mods that can be changed ({count})',
+	},
+	switchDone: {
+		id: 'app.instance.version-switch.done',
+		defaultMessage: 'Minecraft installation switched',
+	},
+	switchDisabledCount: {
+		id: 'app.instance.version-switch.disabled-count',
+		defaultMessage:
+			'{count, plural, one {# incompatible mod disabled} other {# incompatible mods disabled}}',
+	},
+	saveSwitchBackup: {
+		id: 'app.instance.version-switch.save-backup',
+		defaultMessage: 'Save a backup before switching',
+	},
+	restoreSwitchBackup: {
+		id: 'app.instance.version-switch.restore-backup',
+		defaultMessage: 'You can restore the ZIP as a separate instance from the library.',
+	},
+	switchBackupSaved: {
+		id: 'app.instance.version-switch.backup-saved',
+		defaultMessage: 'Pre-switch backup saved',
+	},
 })
+
+const versionSwitchModal = useTemplateRef<InstanceType<typeof NewModal>>('versionSwitchModal')
+const versionSwitchItems = ref<Awaited<ReturnType<typeof previewInstanceVersionSwitch>>>([])
+const versionSwitchTarget = ref({ version: '', loader: '' })
+const disableConflicts = ref(true)
+const savingSwitchBackup = ref(false)
+const disableableMods = computed(() => versionSwitchItems.value.filter((item) => item.can_disable))
+const issueMessage = {
+	game_version: messages.switchGameMismatch,
+	mod_loader: messages.switchLoaderMismatch,
+	unverified: messages.switchUnknown,
+}
+let resolveVersionSwitch: ((accepted: boolean) => void) | undefined
+
+function settleVersionSwitch(accepted: boolean) {
+	const resolve = resolveVersionSwitch
+	resolveVersionSwitch = undefined
+	resolve?.(accepted)
+}
+
+function acceptVersionSwitch() {
+	if (savingSwitchBackup.value) return
+	settleVersionSwitch(true)
+	versionSwitchModal.value?.hide()
+}
+
+async function saveVersionSwitchBackup() {
+	if (savingSwitchBackup.value) return
+	savingSwitchBackup.value = true
+	try {
+		const { id, name, game_version: version } = instance.value
+		const fileName = `${name}-${version}`.replace(/[<>:"/\\|?*]/g, '_').replace(/[. ]+$/, '')
+		const output = await save({
+			defaultPath: `${fileName}.before-switch.acl-instance.zip`,
+			filters: [{ name: 'ACL ZIP', extensions: ['zip'] }],
+		})
+		if (!output) return
+		await exportInstanceArchive(id, output)
+		addNotification({ type: 'success', title: formatMessage(messages.switchBackupSaved) })
+	} catch (error) {
+		handleError(error)
+	} finally {
+		savingSwitchBackup.value = false
+	}
+}
+
+onBeforeUnmount(() => settleVersionSwitch(false))
+
+function confirmVersionSwitch() {
+	const modal = versionSwitchModal.value
+	if (!modal) return Promise.resolve(false)
+	return new Promise<boolean>((resolve) => {
+		resolveVersionSwitch = resolve
+		modal.show()
+	})
+}
 
 function getManifest(loader: string) {
 	const map: Record<string, Manifest | undefined> = {
@@ -341,31 +456,54 @@ provideInstallationSettings({
 	},
 
 	async save(platform, gameVersion, loaderVersionId) {
-		debug('save: called', {
-			instanceId: instance.value.id,
-			platform,
-			gameVersion,
-			loaderVersionId,
-		})
-		const editInstancePatch: Record<string, string | undefined> = {
+		const instanceId = instance.value.id
+		try {
+			versionSwitchItems.value = await previewInstanceVersionSwitch(
+				instanceId,
+				gameVersion,
+				platform,
+			)
+			versionSwitchTarget.value = { version: gameVersion, loader: formatLoaderLabel(platform) }
+			disableConflicts.value = true
+		} catch (error) {
+			handleError(error)
+			throw error
+		}
+		if (!(await confirmVersionSwitch()) || instance.value.id !== instanceId) {
+			throw new Error('Version switch canceled')
+		}
+		const disableMods = disableConflicts.value ? disableableMods.value.map((item) => item.path) : []
+		try {
+			const job = await switchInstanceVersion(
+				instanceId,
+				gameVersion,
+				platform,
+				loaderVersionId,
+				disableMods,
+			)
+			await wait_for_install_job(appEvents, job.job_id)
+			addNotification({
+				type: 'success',
+				title: formatMessage(messages.switchDone),
+				text: disableMods.length
+					? formatMessage(messages.switchDisabledCount, { count: disableMods.length })
+					: undefined,
+			})
+		} catch (error) {
+			handleError(error)
+			throw error
+		} finally {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: instanceKeys.detail(instanceId) }),
+				queryClient.invalidateQueries({ queryKey: instanceKeys.content(instanceId) }),
+				queryClient.invalidateQueries({ queryKey: instanceKeys.fileManagerContent(instanceId) }),
+			])
+		}
+
+		trackEvent('InstanceRepair', {
 			loader: platform,
 			game_version: gameVersion,
-		}
-		if (platform !== 'vanilla' && loaderVersionId) {
-			editInstancePatch.loader_version = loaderVersionId
-		}
-		await edit(instance.value.id, editInstancePatch).catch(handleError)
-		debug('save: edit complete', { editInstancePatch })
-	},
-
-	afterSave: async () => {
-		debug('afterSave: installing', { instanceId: instance.value.id })
-		await install_existing_instance(instance.value.id, false).catch(handleError)
-		trackEvent('InstanceRepair', {
-			loader: instance.value.loader,
-			game_version: instance.value.game_version,
 		})
-		debug('afterSave: done')
 	},
 
 	async repair() {
@@ -487,6 +625,54 @@ provideInstallationSettings({
 </script>
 
 <template>
+	<NewModal
+		ref="versionSwitchModal"
+		:header="formatMessage(messages.switchTitle)"
+		:on-hide="() => settleVersionSwitch(false)"
+		:disable-close="savingSwitchBackup"
+	>
+		<div class="flex flex-col gap-3 sm:w-[30rem]">
+			<p class="m-0">{{ formatMessage(messages.switchDescription, versionSwitchTarget) }}</p>
+			<ul
+				v-if="versionSwitchItems.length"
+				class="m-0 flex max-h-64 flex-col gap-2 overflow-y-auto pl-5"
+			>
+				<li v-for="item in versionSwitchItems" :key="item.path" class="break-all">
+					<span class="font-semibold text-contrast">{{ item.name }}</span>
+					<span class="block text-sm">{{ formatMessage(issueMessage[item.issue]) }}</span>
+				</li>
+			</ul>
+			<p v-else class="m-0">{{ formatMessage(messages.switchNoIssues) }}</p>
+			<Checkbox
+				v-if="disableableMods.length"
+				v-model="disableConflicts"
+				:label="formatMessage(messages.switchAutoDisable, { count: disableableMods.length })"
+			/>
+			<div class="flex flex-col items-start gap-1">
+				<Button type="outlined" :disabled="savingSwitchBackup" @click="saveVersionSwitchBackup">
+					<SpinnerIcon v-if="savingSwitchBackup" class="animate-spin" />
+					<FolderArchiveIcon v-else />
+					{{ formatMessage(messages.saveSwitchBackup) }}
+				</Button>
+				<p class="m-0 text-sm">{{ formatMessage(messages.restoreSwitchBackup) }}</p>
+			</div>
+		</div>
+		<template #actions>
+			<div class="flex flex-wrap justify-end gap-2">
+				<Button :disabled="savingSwitchBackup" @click="versionSwitchModal?.hide()">
+					{{ formatMessage(commonMessages.cancelButton) }}
+				</Button>
+				<Button
+					type="colored"
+					color="brand"
+					:disabled="savingSwitchBackup"
+					@click="acceptVersionSwitch"
+				>
+					{{ formatMessage(commonMessages.continueButton) }}
+				</Button>
+			</div>
+		</template>
+	</NewModal>
 	<InstallationSettingsLayout>
 		<template #extra>
 			<SharedInstanceInstallationSettingsControls
@@ -495,6 +681,7 @@ provideInstallationSettings({
 				:unlinking="unlinkingSharedInstance"
 				:unlink="unlinkSharedInstance"
 			/>
+			<OptiFineInstallationSettings v-if="!isMinecraftServer" :busy="installationSettingsBusy" />
 		</template>
 	</InstallationSettingsLayout>
 </template>

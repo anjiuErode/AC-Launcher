@@ -45,6 +45,8 @@ const textRef = useTemplateRef('text')
 const messages = defineMessages({
 	pause: { id: 'app.download-manager.pause', defaultMessage: 'Pause installation' },
 	resume: { id: 'app.download-manager.resume', defaultMessage: 'Resume installation' },
+	pauseDownload: { id: 'app.file-download.pause', defaultMessage: 'Pause download' },
+	resumeDownload: { id: 'app.file-download.resume', defaultMessage: 'Resume download' },
 	retry: { id: 'app.action-bar.install.retry', defaultMessage: 'Retry' },
 	copyDetails: { id: 'app.action-bar.install.copy-details', defaultMessage: 'Copy details' },
 	copied: { id: 'app.action-bar.install.copied-details', defaultMessage: 'Copied' },
@@ -62,6 +64,17 @@ const needsAttention = computed(
 	() => props.job.status === 'failed' || props.job.status === 'interrupted',
 )
 const complete = computed(() => props.job.status === 'succeeded' || props.job.status === 'canceled')
+const pauseLabel = computed(() =>
+	formatMessage(
+		props.job.kind === 'external-file'
+			? props.job.paused
+				? messages.resumeDownload
+				: messages.pauseDownload
+			: props.job.paused
+				? messages.resume
+				: messages.pause,
+	),
+)
 const cancelLabel = computed(() =>
 	formatMessage(
 		needsAttention.value
@@ -156,8 +169,8 @@ const instanceLink = computed(() =>
 			<div class="flex items-center gap-0.5">
 				<IconButton
 					v-if="job.canPause"
-					v-tooltip="formatMessage(job.paused ? messages.resume : messages.pause)"
-					:label="formatMessage(job.paused ? messages.resume : messages.pause)"
+					v-tooltip="pauseLabel"
+					:label="pauseLabel"
 					type="quiet"
 					size="sm"
 					:disabled="job.busy"

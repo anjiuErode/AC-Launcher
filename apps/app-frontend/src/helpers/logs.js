@@ -68,6 +68,10 @@ export async function get_live_log_buffer(instanceId) {
 	return await invoke('plugin:logs|logs_get_live_log_buffer', { instanceId })
 }
 
+export async function get_launch_diagnostic(instanceId) {
+	return await invoke('plugin:logs|logs_launch_diagnostic', { instanceId })
+}
+
 /// Clear the live log buffer for an instance on the Rust side
 export async function clear_log_buffer(instanceId) {
 	return await invoke('plugin:logs|logs_clear_live_log_buffer', { instanceId })

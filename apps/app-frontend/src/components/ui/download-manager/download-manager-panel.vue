@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { DropdownIcon } from '@modrinth/assets'
+import { DropdownIcon, PlusIcon } from '@modrinth/assets'
 import {
 	Button,
 	Collapsible,
+	commonMessages,
 	defineMessages,
+	Input,
 	useFormatNumber,
 	useScrollIndicator,
 	useVIntl,
 } from '@modrinth/ui'
 import { useResizeObserver } from '@vueuse/core'
-import { computed, ref, useId, useTemplateRef } from 'vue'
+import { computed, nextTick, ref, useId, useTemplateRef } from 'vue'
 
 import DownloadManagerJobRow from './download-manager-job.vue'
+import { startManualUrlDownload } from './external-file-downloads'
 import type { DownloadManagerJob } from './use-download-manager'
 
 const props = defineProps<{
@@ -42,10 +45,27 @@ const messages = defineMessages({
 		defaultMessage: 'Clear all completed tasks',
 	},
 	complete: { id: 'app.download-manager.complete', defaultMessage: 'Complete' },
-	empty: { id: 'app.download-manager.empty', defaultMessage: 'No installation tasks' },
+	empty: { id: 'app.download-manager.no-tasks', defaultMessage: 'No tasks' },
 	rate: { id: 'app.download-manager.estimated-rate', defaultMessage: 'Estimated download speed' },
+	newDownload: { id: 'app.download-manager.new-download', defaultMessage: 'New download' },
+	downloadUrl: { id: 'app.download-manager.download-url', defaultMessage: 'Download URL' },
+	invalidUrl: {
+		id: 'app.download-manager.invalid-url',
+		defaultMessage: 'Enter a valid HTTP or HTTPS link without a username or password.',
+	},
+	destinationError: {
+		id: 'app.download-manager.destination-error',
+		defaultMessage: 'Could not open the save dialog. Try again.',
+	},
 })
 const panel = useTemplateRef('panel')
+const newDownloadButton = useTemplateRef('new-download-button')
+const urlField = useTemplateRef('url-field')
+const urlFormId = useId()
+const showUrlForm = ref(false)
+const urlInput = ref('')
+const selectingDestination = ref(false)
+const formError = ref<'invalidUrl' | 'destinationError' | null>(null)
 const scrollContainer = useTemplateRef<HTMLElement>('scroll-container')
 const scrollContent = useTemplateRef<HTMLElement>('scroll-content')
 const { showTopFade, showBottomFade, checkScrollState } = useScrollIndicator(scrollContainer)
@@ -63,6 +83,51 @@ const sections = computed(() =>
 function toggleSection(id: string) {
 	if (collapsed.value.has(id)) collapsed.value.delete(id)
 	else collapsed.value.add(id)
+}
+
+function closeUrlForm() {
+	showUrlForm.value = false
+	urlInput.value = ''
+	formError.value = null
+}
+
+async function toggleUrlForm() {
+	if (showUrlForm.value) {
+		closeUrlForm()
+		return
+	}
+	showUrlForm.value = true
+	await nextTick()
+	urlField.value?.focus()
+}
+
+async function addDownload() {
+	if (selectingDestination.value) return
+	const text = urlInput.value.trim()
+	let url: URL | undefined
+	try {
+		if (/^https?:\/\//i.test(text)) url = new URL(text)
+	} catch {
+		// Handle invalid URLs below without printing the user's link.
+	}
+	if (!url || url.username || url.password) {
+		formError.value = 'invalidUrl'
+		urlField.value?.focus()
+		return
+	}
+
+	formError.value = null
+	selectingDestination.value = true
+	try {
+		if (await startManualUrlDownload(url)) closeUrlForm()
+	} catch {
+		formError.value = 'destinationError'
+	} finally {
+		selectingDestination.value = false
+		await nextTick()
+		if (showUrlForm.value) urlField.value?.focus()
+		else newDownloadButton.value?.element?.focus()
+	}
 }
 
 defineExpose({ focus: () => panel.value?.focus() })
@@ -90,10 +155,23 @@ defineExpose({ focus: () => panel.value?.focus() })
 			<span
 				v-if="rate"
 				v-tooltip="formatMessage(messages.rate)"
-				class="text-sm font-medium leading-5 text-primary tabular-nums"
+				class="truncate text-sm font-medium leading-5 text-primary tabular-nums"
 			>
 				{{ rate }}
 			</span>
+			<Button
+				ref="new-download-button"
+				type="outlined"
+				size="xs"
+				class="ml-auto shrink-0"
+				:aria-expanded="showUrlForm"
+				:aria-controls="showUrlForm ? urlFormId : undefined"
+				:disabled="selectingDestination"
+				@click="toggleUrlForm"
+			>
+				<PlusIcon aria-hidden="true" />
+				{{ formatMessage(messages.newDownload) }}
+			</Button>
 		</div>
 		<div class="relative min-h-0">
 			<div
@@ -107,6 +185,44 @@ defineExpose({ focus: () => panel.value?.focus() })
 				style="max-height: min(32rem, max(0px, calc(100dvh - 8rem)))"
 			>
 				<div ref="scroll-content" class="flex flex-col gap-4 p-2.5">
+					<form
+						v-if="showUrlForm"
+						:id="urlFormId"
+						class="flex flex-col gap-2 rounded-xl bg-surface-4 p-2.5"
+						novalidate
+						@submit.prevent="addDownload"
+					>
+						<label :for="`${urlFormId}-input`" class="text-sm font-medium text-contrast">
+							{{ formatMessage(messages.downloadUrl) }}
+						</label>
+						<Input
+							:id="`${urlFormId}-input`"
+							ref="url-field"
+							v-model="urlInput"
+							type="url"
+							size="small"
+							placeholder="https://"
+							autocomplete="off"
+							:spellcheck="false"
+							:disabled="selectingDestination"
+							:error="formError === 'invalidUrl'"
+							:aria-describedby="formError ? `${urlFormId}-error` : undefined"
+							@input="formError = null"
+						/>
+						<p v-if="formError" :id="`${urlFormId}-error`" role="alert" class="m-0 text-xs text-red">
+							{{ formatMessage(messages[formError]) }}
+						</p>
+						<Button
+							class="self-end"
+							type="colored"
+							color="brand"
+							native-type="submit"
+							size="sm"
+							:loading="selectingDestination"
+						>
+							{{ formatMessage(commonMessages.downloadButton) }}
+						</Button>
+					</form>
 					<template v-for="(section, index) in sections" :key="section.id">
 						<div v-if="index" class="h-px shrink-0 bg-surface-5" />
 						<section class="flex flex-col">

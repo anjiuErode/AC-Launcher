@@ -79,13 +79,12 @@ import { useGuildPresenceSync } from '@/composables/use-guild-presence'
 import { useGuildSession } from '@/composables/use-guild-session'
 import { useInstanceMetadataRefresh } from '@/composables/use-instance-metadata-refresh'
 import { useQuickInstanceLimit } from '@/composables/use-quick-instance-limit.ts'
-import { isDarkTheme, useTheme } from '@/composables/use-theme.ts'
+import { useTheme } from '@/composables/use-theme.ts'
 import { config } from '@/config'
 import { provideMinecraftAccounts } from '@/features/minecraft-accounts/context'
 import AppSettingsModal from '@/features/settings/app-settings-modal/index.vue'
 import { provideSettingsActions } from '@/features/settings/settings-actions'
 import NewUpdateModal from '@/features/updates/new-update-modal/index.vue'
-import { rememberAccountAppearance } from '@/helpers/account-appearance.ts'
 import { debugAnalytics, initAnalytics, trackEvent } from '@/helpers/analytics'
 import { check_reachable } from '@/helpers/auth.js'
 import { get_user, get_user_many, get_version } from '@/helpers/cache.js'
@@ -608,8 +607,6 @@ async function setupApp() {
 		hide_nametag_skins_page,
 		advanced_rendering,
 		toggle_sidebar,
-		sync_theme_across_devices,
-		sync_behavior_across_devices,
 		sync_features_across_devices,
 		show_files_tab_in_instances,
 		show_worlds_tab_in_instances,
@@ -666,8 +663,6 @@ async function setupApp() {
 
 	appTheme.preferred = theme
 	appTheme.advancedRendering = advanced_rendering
-	appTheme.syncAcrossDevices = sync_theme_across_devices
-	appSettings.syncBehaviorAcrossDevices = sync_behavior_across_devices
 	appSettings.syncFeaturesAcrossDevices = sync_features_across_devices
 	appSettings.hideNametagSkinsPage = hide_nametag_skins_page
 	appSettings.toggleSidebar = toggle_sidebar
@@ -931,66 +926,17 @@ watch(
 		userPreferencesSync = userPreferencesSync
 			.then(async () => {
 				const settings = await getSettings()
-				const selectedTheme = preferences.appearance.auto ? 'system' : preferences.appearance.theme
-				const userId = credentials.value?.user_id ?? credentials.value?.user?.id
-				if (userId) {
-					rememberAccountAppearance(userId, preferences.appearance)
-				}
-				if (appTheme.syncAcrossDevices && isDarkTheme(preferences.appearance.theme)) {
-					appTheme.preferredDark = preferences.appearance.theme
-				}
 				const locale = preferences.localization.locale
 				const behavior = preferences.behavior
 				let settingsChanged = false
 
-				if (appTheme.syncAcrossDevices && appTheme.preferred !== selectedTheme) {
-					appTheme.preferred = selectedTheme
-				}
 				if (i18n.global.locale.value !== locale) {
 					await setLocale(locale)
 				}
 
-				if (appTheme.syncAcrossDevices && settings.theme !== selectedTheme) {
-					settings.theme = selectedTheme
-					settingsChanged = true
-				}
 				if (settings.locale !== locale) {
 					settings.locale = locale
 					settingsChanged = true
-				}
-
-				if (behavior && appSettings.syncBehaviorAcrossDevices) {
-					const behaviorSettings = {
-						refocus_on_game_close: 'refocusOnGameClose',
-						compact_instance_cards: 'compactInstanceCards',
-						show_play_time: 'showPlayTime',
-						warn_on_unknown_modpacks: 'warnOnUnknownModpacks',
-						skip_non_essential_warnings: 'skipNonEssentialWarnings',
-					}
-					for (const [key, stateKey] of Object.entries(behaviorSettings)) {
-						const value = behavior[key] ?? settings[key]
-						appSettings[stateKey] = value
-						if (settings[key] !== value) {
-							settings[key] = value
-							settingsChanged = true
-						}
-					}
-
-					appSettings.toggleSidebar = behavior.hide_right_sidebar
-					appSettings.hideNametagSkinsPage = behavior.hide_nametag
-
-					if (settings.hide_on_process_start !== behavior.minimize_app) {
-						settings.hide_on_process_start = behavior.minimize_app
-						settingsChanged = true
-					}
-					if (settings.toggle_sidebar !== behavior.hide_right_sidebar) {
-						settings.toggle_sidebar = behavior.hide_right_sidebar
-						settingsChanged = true
-					}
-					if (settings.hide_nametag_skins_page !== behavior.hide_nametag) {
-						settings.hide_nametag_skins_page = behavior.hide_nametag
-						settingsChanged = true
-					}
 				}
 
 				if (behavior && appSettings.syncFeaturesAcrossDevices) {
@@ -1802,17 +1748,20 @@ provideAppUpdateDownloadProgress(appUpdateDownload)
 const {
 	session: guildSession,
 	busy: guildBusy,
+	loading: guildLoading,
 	signInError: guildSignInError,
 	signIn: beginGuildLogin,
 	refresh: refreshGuildSession,
 } = useGuildSession()
 
 async function handleGuildLogin() {
+	if (guildBusy.value || guildLoading.value || guildSession.value) return
 	if (await beginGuildLogin()) return
+	if (!guildSignInError.value) return
 	addNotification({
 		type: 'error',
 		title: formatMessage(messages.guildSignIn),
-		text: guildSignInError.value ?? '',
+		text: guildSignInError.value,
 	})
 }
 
@@ -1947,7 +1896,7 @@ onMounted(refreshGuildSession)
 				v-if="!guildSession"
 				v-tooltip.right="formatMessage(messages.guildSignIn)"
 				:to="() => handleGuildLogin()"
-				:disabled="guildBusy"
+				:disabled="guildBusy || guildLoading"
 			>
 				<LogInIcon class="text-brand" />
 			</NavButton>
@@ -2036,7 +1985,8 @@ onMounted(refreshGuildSession)
 			:visible="sidebarVisible"
 			:request-sign-in="() => requestSignIn()"
 			@create-instance="installationModal?.show()"
-			@login-modrinth="signIn"
+			@login-minecraft="minecraftRequiredModal?.show()"
+			@login-guild="handleGuildLogin"
 		/>
 	</div>
 	<I18nDebugPanel />

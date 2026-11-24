@@ -1,4 +1,271 @@
 {
+	"app.offline-account.label": {
+		"message": "Offline player"
+	},
+	"app.offline-account.add": {
+		"message": "Add offline player"
+	},
+	"app.offline-account.name": {
+		"message": "Player name"
+	},
+	"app.offline-account.create": {
+		"message": "Create"
+	},
+	"app.offline-account.cancel": {
+		"message": "Cancel"
+	},
+	"app.launch-diagnostic.java": {
+		"message": "The Java runtime could not start this instance. Check the Java version in the instance settings."
+	},
+	"app.launch-diagnostic.missing-mod": {
+		"message": "The loader reports a missing mod ({mod}). Review the compatible versions before installing it."
+	},
+	"app.launch-diagnostic.game-library": {
+		"message": "A game library appears missing or damaged. Repair the game files before launching again."
+	},
+	"app.launch-diagnostic.unknown-exit": {
+		"message": "Minecraft exited unexpectedly. Review this instance’s game log for more information."
+	},
+	"app.launch-diagnostic.title": {
+		"message": "Launch diagnosis"
+	},
+	"app.launch-diagnostic.java-settings": {
+		"message": "Open Java settings"
+	},
+	"app.launch-diagnostic.find-mod": {
+		"message": "Find dependency"
+	},
+	"app.launch-diagnostic.repair": {
+		"message": "Repair and relaunch"
+	},
+	"app.launch-diagnostic.logs": {
+		"message": "View game logs"
+	},
+	"app.launch-diagnostic.dismiss": {
+		"message": "Dismiss"
+	},
+	"app.launch-diagnostic.online-analysis": {
+		"message": "Send current log to mclo.gs for analysis"
+	},
+	"app.launch-diagnostic.no-online-result": {
+		"message": "No diagnosis was returned for this log."
+	},
+	"app.accounts.external.add": {
+		"message": "Add external account"
+	},
+	"app.accounts.external.address": {
+		"message": "HTTPS authentication server"
+	},
+	"app.accounts.external.destination": {
+		"message": "Your credentials will be sent to this server"
+	},
+	"app.accounts.external.username": {
+		"message": "External account"
+	},
+	"app.accounts.external.password": {
+		"message": "External account password"
+	},
+	"app.accounts.external.login": {
+		"message": "Sign in to this server"
+	},
+	"app.accounts.external.profile": {
+		"message": "Choose a Minecraft profile"
+	},
+	"app.accounts.external.discovery-failed": {
+		"message": "Could not verify this HTTPS authentication server."
+	},
+	"app.accounts.external.login-failed": {
+		"message": "Sign-in failed. Check your account, password, and authentication server."
+	},
+	"app.accounts.external.profile-failed": {
+		"message": "Could not activate the profile. Sign in and choose the profile again."
+	},
+	"app.instance.version-switch.save-backup": {
+		"message": "Save a backup before switching"
+	},
+	"app.instance.version-switch.restore-backup": {
+		"message": "You can restore the ZIP as a separate instance from the library."
+	},
+	"app.instance.version-switch.backup-saved": {
+		"message": "Pre-switch backup saved"
+	},
+	"app.external-import.launcher-title": {
+		"message": "Import from PCL2, PCL-CE, or HMCL"
+	},
+	"app.external-import.curseforge-title": {
+		"message": "CurseForge content"
+	},
+	"app.external-import.search-content": {
+		"message": "Search CurseForge"
+	},
+	"app.external-import.category": {
+		"message": "Content type"
+	},
+	"app.external-import.no-content": {
+		"message": "No projects found."
+	},
+	"app.external-import.manual-content": {
+		"message": "Open this file on CurseForge"
+	},
+	"app.external-import.select-target": {
+		"message": "Choose a compatible instance"
+	},
+	"app.external-import.no-targets": {
+		"message": "No compatible installed instances are available. Stop Minecraft if the target instance is running."
+	},
+	"app.external-import.required-projects": {
+		"message": "Required CurseForge project IDs: {ids}. ACL could not verify these dependencies for this file."
+	},
+	"app.external-import.required-project-list": {
+		"message": "Required CurseForge projects: {ids}. Choose an instance to check them."
+	},
+	"app.external-import.satisfied-projects": {
+		"message": "Verified in this instance: {ids}"
+	},
+	"app.external-import.conflicting-projects": {
+		"message": "ACL could not verify conflicts with CurseForge project IDs: {ids}."
+	},
+	"app.external-import.choose-world": {
+		"message": "Choose a local world"
+	},
+	"app.external-import.no-world": {
+		"message": "No unlocked singleplayer worlds were found in this instance."
+	},
+	"app.external-import.install-content": {
+		"message": "Install content"
+	},
+	"app.external-import.content-installed": {
+		"message": "Installed to {path}"
+	},
+	"app.external-import.launcher-description": {
+		"message": "Select the launcher folder, .minecraft folder, or a version folder. ACL copies the selected game data into a new instance."
+	},
+	"app.external-import.launcher": {
+		"message": "Source launcher"
+	},
+	"app.external-import.choose-directory": {
+		"message": "Choose directory"
+	},
+	"app.external-import.version": {
+		"message": "Minecraft version"
+	},
+	"app.external-import.select-version": {
+		"message": "Select a version"
+	},
+	"app.external-import.layout": {
+		"message": "Game data directory"
+	},
+	"app.external-import.select-layout": {
+		"message": "Select the layout used by your launcher"
+	},
+	"app.external-import.shared": {
+		"message": "Shared Minecraft folder"
+	},
+	"app.external-import.isolated": {
+		"message": "Isolated version folder"
+	},
+	"app.external-import.layout-hint": {
+		"message": "Confirm the folder that contains the saves and mods for this version. Some launchers use a global isolation setting."
+	},
+	"app.external-import.source-summary": {
+		"message": "{saves} saves · {mods} mod files · {config} config files"
+	},
+	"app.external-import.missing": {
+		"message": "Missing from this directory: {paths}"
+	},
+	"app.external-import.unsupported-version": {
+		"message": "Unsupported format"
+	},
+	"app.external-import.version-summary": {
+		"message": "Minecraft {version} · {loader}"
+	},
+	"app.external-import.archive": {
+		"message": "Import a CurseForge ZIP"
+	},
+	"app.external-import.choose-archive": {
+		"message": "Choose ZIP"
+	},
+	"app.external-import.browse": {
+		"message": "Browse online"
+	},
+	"app.external-import.api-unavailable": {
+		"message": "Online browsing requires an approved CurseForge API key in the ACL_CURSEFORGE_API_KEY environment variable. Local ZIP previews are available."
+	},
+	"app.external-import.search": {
+		"message": "Search modpacks"
+	},
+	"app.external-import.previous": {
+		"message": "Previous"
+	},
+	"app.external-import.next": {
+		"message": "Next"
+	},
+	"app.external-import.no-results": {
+		"message": "No modpacks found."
+	},
+	"app.external-import.no-files": {
+		"message": "No versions found."
+	},
+	"app.external-import.choose-version": {
+		"message": "See versions"
+	},
+	"app.external-import.manual-pack": {
+		"message": "Get this ZIP on CurseForge and import it locally."
+	},
+	"app.external-import.manual-files": {
+		"message": "Manually downloaded files"
+	},
+	"app.external-import.manual-description": {
+		"message": "Select a folder with the required files you downloaded from CurseForge. ACL checks each file’s exact length and SHA-1 against CurseForge metadata or your local metadata JSON."
+	},
+	"app.external-import.choose-metadata": {
+		"message": "Choose metadata JSON"
+	},
+	"app.external-import.metadata-hint": {
+		"message": "Offline metadata format"
+	},
+	"app.external-import.metadata-fields": {
+		"message": "Provide a JSON array with projectID, fileID, classId, fileName, fileLength (bytes), and sha1 for each file. A standard CurseForge manifest contains only the file IDs and requires separate verification metadata."
+	},
+	"app.external-import.clear": {
+		"message": "Clear selection"
+	},
+	"app.external-import.override-count": {
+		"message": "{count} override files"
+	},
+	"app.external-import.missing-required": {
+		"message": "{count} required files are unresolved. Supply those files with verifiable metadata to continue."
+	},
+	"app.external-import.optional": {
+		"message": "Optional"
+	},
+	"app.external-import.download": {
+		"message": "Automatic download"
+	},
+	"app.external-import.local": {
+		"message": "Local file selected"
+	},
+	"app.external-import.manual-required": {
+		"message": "Manual file needed"
+	},
+	"app.external-import.metadata-unavailable": {
+		"message": "Verification metadata unavailable"
+	},
+	"app.external-import.unsupported": {
+		"message": "Unsupported file"
+	},
+	"app.external-import.working": {
+		"message": "Reading source…"
+	},
+	"app.external-import.installing": {
+		"message": "Import queued. Follow its progress in Downloads."
+	},
+	"app.external-import.import": {
+		"message": "Import instance"
+	},
+	"app.external-import.failed": {
+		"message": "Unable to read or import this source."
+	},
 	"app": {
 		"settings": {
 			"tabs": {
@@ -189,6 +456,9 @@
 	"app.appearance-settings.minimize-launcher.description": {
 		"message": "Minimize ACL when Minecraft starts."
 	},
+	"app.appearance-settings.native-decorations.restart-description": {
+		"message": "Use your operating system's title bar and window controls. Restart ACL to apply the change."
+	},
 	"app.appearance-settings.minimize-launcher.title": {
 		"message": "Minimize app"
 	},
@@ -203,6 +473,9 @@
 	},
 	"app.appearance-settings.skip-non-essential-warnings.title": {
 		"message": "Skip non-essential warnings"
+	},
+	"app.appearance-settings.theme.description": {
+		"message": "Choose a color theme for ACL on this device."
 	},
 	"app.appearance-settings.toggle-sidebar.description": {
 		"message": "Hide the right sidebar by default and add a button to show or hide it."
@@ -237,18 +510,47 @@
 	"app.behavior-settings.startup-and-navigation.title": {
 		"message": "Startup and navigation"
 	},
-	"app.behavior-settings.sync-across-devices.description": {
-		"message": "Use these behavior settings everywhere you're signed in. Turn this off to keep separate settings on this device."
+	"app.behavior-settings.file-manager-default-tab.title": {
+		"message": "Default file manager section"
 	},
-	"app.behavior-settings.sync-across-devices.signed-out-tooltip": {
-		"message": "Sign into a Modrinth account to sync settings."
-	},
-	"app.behavior-settings.sync-across-devices.title": {
-		"message": "Sync behavior across devices"
+	"app.behavior-settings.file-manager-default-tab.description": {
+		"message": "The section shown when opening instance file management."
 	},
 	"app.browse.add-servers-to-instance": {
 		"message": "Adding server to instance"
 	},
+	"app.file-manager.category.all": { "message": "All files" },
+	"app.file-manager.category.mods": { "message": "Mods" },
+	"app.file-manager.category.resourcepacks": { "message": "Resource packs" },
+	"app.file-manager.category.shaderpacks": { "message": "Shader packs" },
+	"app.file-manager.category.schematics": { "message": "Schematics" },
+	"app.file-manager.schematic-details": { "message": "Schematic details" },
+	"app.file-manager.schematic-delete-title": { "message": "Delete schematic?" },
+	"app.file-manager.schematic-delete-description": { "message": "This permanently deletes the file from this instance's schematics folder." },
+	"app.file-manager.schematic-name": { "message": "Name" },
+	"app.file-manager.schematic-author": { "message": "Author" },
+	"app.file-manager.schematic-dimensions": { "message": "Dimensions" },
+	"app.file-manager.schematic-blocks": { "message": "Declared block count" },
+	"app.file-manager.not-provided": { "message": "Not provided" },
+	"app.file-manager.schematic-load-failed": { "message": "Failed to read schematic" },
+	"app.file-manager.schematic-deleted": { "message": "Schematic deleted" },
+	"app.file-manager.no-schematics": { "message": "This instance has no schematic files" },
+	"app.file-manager.content-details": { "message": "File details" },
+	"app.file-manager.content-name": { "message": "Name" },
+	"app.file-manager.content-version": { "message": "Version" },
+	"app.file-manager.content-file-name": { "message": "File name" },
+	"app.file-manager.content-description": { "message": "Description" },
+	"app.file-manager.content-authors": { "message": "Authors" },
+	"app.file-manager.content-delete-title": { "message": "Delete this file?" },
+	"app.file-manager.content-delete-description": { "message": "This removes the content file from the current instance." },
+	"app.file-manager.content-enabled": { "message": "Disable" },
+	"app.file-manager.content-disabled": { "message": "Enable" },
+	"app.file-manager.content-toggle-failed": { "message": "Failed to change file state" },
+	"app.file-manager.no-category-content": { "message": "No files in this category" },
+	"app.file-manager.pack-files": { "message": "{count} items" },
+	"app.file-manager.modified": { "message": "Modified" },
+	"app.file-manager.content-size": { "message": "Size" },
+	"app.file-manager.locate": { "message": "Locate file" },
 	"app.browse.add-to-an-instance": {
 		"message": "Add to an instance"
 	},
@@ -360,6 +662,15 @@
 	"app.download-manager.complete": {
 		"message": "Complete"
 	},
+	"app.download-manager.destination-error": {
+		"message": "Could not open the save dialog. Try again."
+	},
+	"app.download-manager.download-error": {
+		"message": "Could not download the file."
+	},
+	"app.download-manager.download-url": {
+		"message": "Download URL"
+	},
 	"app.download-manager.duplicated-instance": {
 		"message": "Duplicated instance"
 	},
@@ -381,14 +692,23 @@
 	"app.download-manager.instance-installation": {
 		"message": "Instance installation"
 	},
+	"app.download-manager.invalid-url": {
+		"message": "Enter a valid HTTP or HTTPS link without a username or password."
+	},
 	"app.download-manager.modpack": {
 		"message": "Modpack"
 	},
 	"app.download-manager.modpack-installation": {
 		"message": "Modpack installation"
 	},
+	"app.download-manager.new-download": {
+		"message": "New download"
+	},
 	"app.download-manager.new-instance": {
 		"message": "New instance"
+	},
+	"app.download-manager.no-tasks": {
+		"message": "No tasks"
 	},
 	"app.download-manager.pause": {
 		"message": "Pause installation"
@@ -507,23 +827,38 @@
 	"app.file-download.canceling": {
 		"message": "Canceling download…"
 	},
+	"app.file-download.pause": {
+		"message": "Pause download"
+	},
 	"app.file-download.preparing": {
 		"message": "Preparing download…"
+	},
+	"app.file-download.resume": {
+		"message": "Resume download"
 	},
 	"app.file-download.waiting": {
 		"message": "Waiting for the server…"
 	},
 	"app.guild-account.description": {
-		"message": "Signs you in to guild-only content: announcements, modpacks and the member list. Separate from your Modrinth account."
+		"message": "Sign in to see guild announcements, modpacks and online members. Your guild account is separate from Modrinth."
 	},
 	"app.guild-account.email": {
 		"message": "Email"
+	},
+	"app.guild-account.loading": {
+		"message": "Checking sign-in status…"
 	},
 	"app.guild-account.not-signed-in": {
 		"message": "Not signed in"
 	},
 	"app.guild-account.password": {
 		"message": "Password"
+	},
+	"app.guild-account.read-failed": {
+		"message": "Could not read sign-in status"
+	},
+	"app.guild-account.retry-read": {
+		"message": "Try again"
 	},
 	"app.guild-account.sign-in": {
 		"message": "Sign in"
@@ -542,6 +877,9 @@
 	},
 	"app.guild-account.signed-in-as": {
 		"message": "Signed in as"
+	},
+	"app.guild-account.signing-out": {
+		"message": "Signing out…"
 	},
 	"app.guild-account.title": {
 		"message": "Guild account"
@@ -614,9 +952,6 @@
 	},
 	"app.guild.pack.reject-body": {
 		"message": "Cannot recognise the import operation. The archive contains no modpack manifest (modrinth.index.json, manifest.json) or instance version file."
-	},
-	"app.guild.pack.reject-curseforge": {
-		"message": "This is a CurseForge export, which only lists mod IDs. Installing it requires the CurseForge API, which ACL does not use. Please use a .mrpack or a full instance archive instead."
 	},
 	"app.guild.pack.reject-title": {
 		"message": "Cannot import this pack"
@@ -1097,6 +1432,66 @@
 	},
 	"app.instance.tab.worlds": {
 		"message": "Worlds"
+	},
+	"app.instance.archive.description": {
+		"message": "Save worlds, settings, mods, and resource files together. Close Minecraft before exporting."
+	},
+	"app.instance.archive.export": {
+		"message": "Export instance archive"
+	},
+	"app.instance.archive.exported": {
+		"message": "Instance archive saved"
+	},
+	"app.instance.archive.exporting": {
+		"message": "Exporting instance…"
+	},
+	"app.instance.archive.restore": {
+		"message": "Restore instance archive"
+	},
+	"app.instance.archive.restored": {
+		"message": "Instance restored as a new copy"
+	},
+	"app.instance.archive.restoring": {
+		"message": "Restoring instance…"
+	},
+	"app.instance.version-switch.auto-disable": {
+		"message": "Disable incompatible mods that can be changed ({count})"
+	},
+	"app.instance.version-switch.description": {
+		"message": "Install Minecraft {version} with {loader}. Review these files before switching."
+	},
+	"app.instance.version-switch.disabled-count": {
+		"message": "{count, plural, one {# incompatible mod disabled} other {# incompatible mods disabled}}"
+	},
+	"app.instance.version-switch.done": {
+		"message": "Minecraft installation switched"
+	},
+	"app.instance.version-switch.game-mismatch": {
+		"message": "Requires a version that supports this Minecraft release"
+	},
+	"app.instance.version-switch.loader-mismatch": {
+		"message": "Requires a version that supports this mod loader"
+	},
+	"app.instance.version-switch.no-issues": {
+		"message": "No compatibility issues were found in the indexed content."
+	},
+	"app.instance.version-switch.title": {
+		"message": "Change Minecraft installation"
+	},
+	"app.instance.version-switch.unknown": {
+		"message": "Compatibility requires a manual check"
+	},
+	"app.instance.worlds.backup-complete": {
+		"message": "World backup saved to the instance backups folder"
+	},
+	"app.instance.worlds.backup-world": {
+		"message": "Back up world"
+	},
+	"app.instance.worlds.restore-complete": {
+		"message": "World restored to {folder}"
+	},
+	"app.instance.worlds.restore-world": {
+		"message": "Restore world"
 	},
 	"app.instance.worlds.add-server": {
 		"message": "Add server"
@@ -1651,16 +2046,22 @@
 		"message": "Automatic · follow system proxy, then environment variables"
 	},
 	"app.network-settings.proxy.current-manual": {
-		"message": "Manual · {url}"
-	},
-	"app.network-settings.proxy.current-manual-empty": {
-		"message": "Manual · no address set"
+		"message": "Manual proxy"
 	},
 	"app.network-settings.proxy.current-off": {
 		"message": "Direct connection · all proxies ignored"
 	},
 	"app.network-settings.proxy.description": {
 		"message": "Controls how ACL reaches Modrinth and Microsoft sign-in. Keep it on automatic unless you know you need otherwise."
+	},
+	"app.network-settings.proxy.invalid-address": {
+		"message": "Enter a valid HTTP or HTTPS proxy address."
+	},
+	"app.network-settings.proxy.load-failed": {
+		"message": "Could not read the saved proxy settings."
+	},
+	"app.network-settings.proxy.loading": {
+		"message": "Loading proxy settings…"
 	},
 	"app.network-settings.proxy.mode-auto": {
 		"message": "Automatic"
@@ -1681,22 +2082,46 @@
 		"message": "Ignore every proxy setting and connect directly"
 	},
 	"app.network-settings.proxy.pending-restart": {
-		"message": "Changed settings take effect after restarting ACL."
+		"message": "Restart ACL to apply the saved proxy settings."
+	},
+	"app.network-settings.proxy.probe-error": {
+		"message": "Connection request failed"
+	},
+	"app.network-settings.proxy.probe-timeout": {
+		"message": "Connection timed out"
 	},
 	"app.network-settings.proxy.reachable": {
 		"message": "Reachable"
 	},
+	"app.network-settings.proxy.retry": {
+		"message": "Try again"
+	},
 	"app.network-settings.proxy.save": {
 		"message": "Save"
 	},
+	"app.network-settings.proxy.save-failed": {
+		"message": "Could not save the proxy settings. Try again."
+	},
 	"app.network-settings.proxy.saved": {
-		"message": "Saved. Restart ACL for the new proxy setting to take effect."
+		"message": "Proxy settings saved."
+	},
+	"app.network-settings.proxy.saved-invalid": {
+		"message": "The saved proxy address is invalid. ACL falls back to a direct connection when started with this setting."
+	},
+	"app.network-settings.proxy.saving": {
+		"message": "Saving…"
 	},
 	"app.network-settings.proxy.test": {
 		"message": "Test connection"
 	},
+	"app.network-settings.proxy.test-failed": {
+		"message": "Could not start the connection test. Try again."
+	},
 	"app.network-settings.proxy.test-hint": {
 		"message": "Checks Modrinth and Microsoft sign-in with the settings above, without saving them."
+	},
+	"app.network-settings.proxy.testing": {
+		"message": "Testing…"
 	},
 	"app.network-settings.proxy.title": {
 		"message": "Network proxy"
@@ -1706,6 +2131,9 @@
 	},
 	"app.network-settings.proxy.unsaved-changes": {
 		"message": "Unsaved changes"
+	},
+	"app.network-settings.proxy.url-label": {
+		"message": "Proxy address"
 	},
 	"app.network-settings.proxy.url-placeholder": {
 		"message": "http://127.0.0.1:7890"
@@ -1718,6 +2146,36 @@
 	},
 	"app.notification.warning": {
 		"message": "Warning"
+	},
+	"app.optifine.available": {
+		"message": "Download OptiFine {release} from the official site, then select its JAR to install it in this instance."
+	},
+	"app.optifine.conflict": {
+		"message": "This instance already contains another OptiFine file. Remove it from the Mods tab before installing."
+	},
+	"app.optifine.disabled": {
+		"message": "OptiFine is disabled. Enable it from the Mods tab."
+	},
+	"app.optifine.install": {
+		"message": "Select JAR and install"
+	},
+	"app.optifine.installed": {
+		"message": "OptiFine {release} is installed."
+	},
+	"app.optifine.official": {
+		"message": "Open official site"
+	},
+	"app.optifine.repair-needed": {
+		"message": "The OptiFine launch files are incomplete."
+	},
+	"app.optifine.status-error": {
+		"message": "Could not check OptiFine."
+	},
+	"app.optifine.unavailable": {
+		"message": "OptiFine can be installed in an unlocked local instance after Minecraft finishes installing."
+	},
+	"app.optifine.unsupported": {
+		"message": "Supports Vanilla 1.20.1 and 1.21.1, or Forge 47.2.18 on 1.20.1 and Forge 52.0.16 on 1.21.1."
 	},
 	"app.performance-settings.hardware-acceleration.description": {
 		"message": "Render the interface with the GPU. Turn this off if the window turns black, flickers, or the driver crashes."
@@ -3141,9 +3599,6 @@
 	"app.settings.resource-management.app-cache.confirm.description": {
 		"message": "The app may load more slowly until the cache is rebuilt."
 	},
-	"app.settings.resource-management.app-cache.description": {
-		"message": "Clear cached data and download it again from Modrinth. The app may load more slowly until the cache is rebuilt."
-	},
 	"app.settings.resource-management.app-cache.title": {
 		"message": "App cache"
 	},
@@ -3167,9 +3622,6 @@
 	},
 	"app.settings.resource-management.app-directory.title": {
 		"message": "App directory"
-	},
-	"app.settings.resource-management.debug-info.description": {
-		"message": "Export app logs and diagnostic data to a ZIP file to share with Modrinth support."
 	},
 	"app.settings.resource-management.debug-info.export": {
 		"message": "Export debug info"
@@ -3537,11 +3989,17 @@
 	"app.settings.tabs.window": {
 		"message": "Window"
 	},
+	"app.settings.troubleshooting.cache-description": {
+		"message": "Clear cached data. ACL will fetch it again as needed and may load more slowly until the cache is rebuilt."
+	},
 	"app.settings.troubleshooting.clear-cache": {
 		"message": "Clear cache"
 	},
 	"app.settings.troubleshooting.clear-cache.confirm.title": {
 		"message": "Clear the app cache?"
+	},
+	"app.settings.troubleshooting.debug-info-description": {
+		"message": "Export ACL logs and diagnostic data to a ZIP file for troubleshooting."
 	},
 	"app.settings.troubleshooting.report-ad.copied": {
 		"message": "Copied"
@@ -4174,7 +4632,7 @@
 		"message": "Adding files ({completed}/{total})"
 	},
 	"instance.files.managed-content-read-only": {
-		"message": "Manage your installed content via the Content tab"
+		"message": "Manage installed mods from the Mods category"
 	},
 	"instance.files.save-as": {
 		"message": "Save as..."
@@ -4948,13 +5406,22 @@
 		"message": "Sign in to Minecraft"
 	},
 	"minecraft-required.description": {
-		"message": "You need a Microsoft account that owns Minecraft before you can launch and play."
+		"message": "Sign in with Microsoft to use Minecraft online services. Create an offline player to play locally."
 	},
 	"minecraft-required.description-header": {
-		"message": "Sign in to a Microsoft account"
+		"message": "Choose a Minecraft account"
 	},
 	"minecraft-required.dont-have-account": {
 		"message": "Don’t have an account?"
+	},
+	"minecraft-required.drop-hint": {
+		"message": "(Or drag a website card to sign in)"
+	},
+	"minecraft-required.external": {
+		"message": "Third-party sign-in"
+	},
+	"minecraft-required.external-description": {
+		"message": "Sign in with your account from a third-party authentication server."
 	},
 	"minecraft-required.get-minecraft": {
 		"message": "Get Minecraft"
@@ -4963,7 +5430,22 @@
 		"message": "Get support"
 	},
 	"minecraft-required.header": {
-		"message": "Minecraft required"
+		"message": "Choose a sign-in method"
+	},
+	"minecraft-required.invalid-drop": {
+		"message": "Drop an Authlib-Injector sign-in card from an authentication website."
+	},
+	"minecraft-required.microsoft": {
+		"message": "Microsoft sign-in"
+	},
+	"minecraft-required.microsoft-description": {
+		"message": "Verify your Minecraft purchase and use official online services."
+	},
+	"minecraft-required.offline": {
+		"message": "Offline sign-in"
+	},
+	"minecraft-required.offline-description": {
+		"message": "Enter a player name to play locally."
 	},
 	"minecraft-required.sign-in": {
 		"message": "Sign in to Microsoft"
@@ -5003,6 +5485,9 @@
 	},
 	"onboarding-checklist.create-instance": {
 		"message": "Create first instance"
+	},
+	"onboarding-checklist.login-guild": {
+		"message": "Sign in to a guild account"
 	},
 	"onboarding-checklist.login-minecraft": {
 		"message": "Sign in to Minecraft"

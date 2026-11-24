@@ -8,7 +8,6 @@ export interface MinecraftAccountsActions {
 	refreshValues: () => Promise<void>
 	setEquippedSkin: (skin: Skin) => Promise<void>
 	setLoginDisabled: (disabled: boolean) => void
-	login: () => Promise<void>
 }
 
 export const [injectMinecraftAccounts, provideMinecraftAccounts] = createContext<

@@ -26,6 +26,7 @@ async_zip = { workspace = true, features = [
   "zstd",
 ] }
 base64 = { workspace = true }
+md-5 = "0.10.6"
 bon = { workspace = true }
 bytemuck = { workspace = true, features = ["extern_crate_alloc"] }
 bytes = { workspace = true, features = ["serde"] }
@@ -139,7 +140,11 @@ dunce = { workspace = true }
 cidre = { workspace = true, features = ["blocks", "nw"] }
 
 [target."cfg(windows)".dependencies]
-windows = { workspace = true, features = ["Networking_Connectivity", "Win32_Storage_FileSystem"] }
+windows = { workspace = true, features = [
+  "Networking_Connectivity",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+] }
 windows-core = { workspace = true }
 winreg = { workspace = true }
 

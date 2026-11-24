@@ -16,7 +16,7 @@ use crate::launcher::quick_play_version::{
 use crate::server_address::{ServerAddress, parse_server_address};
 use crate::state::server_join_log::JoinLogEntry;
 use crate::state::{
-    Credentials, DirectoryInfo, InstanceInstallStage, InstanceLaunchContext,
+    DirectoryInfo, InstanceInstallStage, InstanceLaunchContext,
     InstanceLink, JavaVersion, MemorySettings, ProcessMetadata, WindowSize,
 };
 use crate::util::io;
@@ -35,6 +35,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 
 mod args;
+pub(crate) use args::GameLaunchIdentity;
 pub(crate) mod hooks;
 mod library;
 
@@ -891,14 +892,14 @@ fn link_project_and_version(
 
 #[tracing::instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub async fn launch_minecraft(
+pub(crate) async fn launch_minecraft(
     java_args: &[String],
     env_args: &[(String, String)],
     mc_set_options: &[(String, String)],
     wrapper: &Option<String>,
     memory: &MemorySettings,
     resolution: &WindowSize,
-    credentials: &Credentials,
+    identity: &GameLaunchIdentity,
     post_exit_hook: Option<String>,
     context: &InstanceLaunchContext,
     mut quick_play_type: QuickPlayType,
@@ -1116,6 +1117,23 @@ pub async fn launch_minecraft(
     let (main_class_keep_alive, main_class_path) =
         get_resource_file!(env "JAVA_JARS_DIR" / "theseus.jar")?;
 
+    let optifine = if matches!(context.link, InstanceLink::Unmanaged) {
+        crate::instance::optifine::vanilla_launch_jars(
+            &state.directories,
+            &instance.id,
+            &content_set.game_version,
+            content_set.loader,
+            java_version.parsed_version,
+        )?
+    } else {
+        None
+    };
+    let mut launch_classpath = vec![main_class_path.as_path()];
+    if let Some(jars) = &optifine {
+        launch_classpath.extend(jars.iter().map(PathBuf::as_path));
+    }
+    launch_classpath.push(&client_path);
+
     let rpc_server = RpcServerBuilder::new().launch().await?;
 
     command.args(
@@ -1128,7 +1146,7 @@ pub async fn launch_minecraft(
             &args::get_class_paths(
                 &state.directories.libraries_dir(),
                 version_info.libraries.as_slice(),
-                &[&main_class_path, &client_path],
+                &launch_classpath,
                 &java_version.architecture,
                 minecraft_updated,
             )?,
@@ -1148,6 +1166,8 @@ pub async fn launch_minecraft(
         .into_iter(),
     );
 
+    command.args(&identity.authlib_jvm_args);
+
     // The java launcher requires access to java.lang.reflect in order to force access in to
     // whatever module the main class is in
     if java_version.parsed_version >= 9 {
@@ -1161,13 +1181,17 @@ pub async fn launch_minecraft(
 
     command
         .arg("com.modrinth.theseus.MinecraftLaunch")
-        .arg(version_info.main_class.clone())
+        .arg(if optifine.is_some() {
+            crate::instance::optifine::LAUNCH_MAIN
+        } else {
+            &version_info.main_class
+        })
         .args(
             args::get_minecraft_arguments(
                 args.get(&d::minecraft::ArgumentType::Game)
                     .map(|x| x.as_slice()),
                 version_info.minecraft_arguments.as_deref(),
-                credentials,
+                identity,
                 &version.id,
                 &version_info.asset_index.id,
                 &instance_path,
@@ -1177,11 +1201,13 @@ pub async fn launch_minecraft(
                 &java_version.architecture,
                 &quick_play_type,
                 quick_play_version,
-            )
-            .await?
+            )?
             .into_iter(),
         )
         .current_dir(instance_path.clone());
+    if optifine.is_some() {
+        command.args(crate::instance::optifine::LAUNCH_ARGUMENTS);
+    }
 
     // CARGO-set DYLD_LIBRARY_PATH breaks Minecraft on macOS during testing on playground
     #[cfg(target_os = "macos")]
@@ -1301,6 +1327,7 @@ pub async fn launch_minecraft(
             env_args,
             state.directories.instance_logs_dir(&instance.path),
             version_info.logging.is_some(),
+            (!identity.authlib_jvm_args.is_empty()).then_some(identity.access_token.as_str()),
             main_class_keep_alive,
             rpc_server,
             state,

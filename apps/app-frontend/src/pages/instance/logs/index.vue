@@ -1,15 +1,26 @@
 <template>
 	<div class="flex flex-col gap-4 h-full">
+		<div v-if="canAnalyse" class="shrink-0">
+			<Button :disabled="analysing" @click="analyseForCrash">
+				{{ formatMessage(messages.onlineAnalysis) }}
+			</Button>
+			<p v-if="analysisUnavailable" class="text-secondary">
+				{{ formatMessage(messages.noResult) }}
+			</p>
+		</div>
 		<ConsolePageLayout />
 	</div>
 </template>
 
 <script setup>
 import {
+	Button,
 	ConsolePageLayout,
+	defineMessages,
 	injectModrinthClient,
 	injectNotificationManager,
 	provideConsoleManager,
+	useVIntl,
 } from '@modrinth/ui'
 import { useQuery } from '@tanstack/vue-query'
 import { computed, ref, shallowRef, triggerRef, watch, watchEffect } from 'vue'
@@ -22,6 +33,17 @@ import { injectInstancePage } from '../instance-context'
 import { instanceKeys } from '../query-options'
 
 const client = injectModrinthClient()
+const { formatMessage } = useVIntl()
+const messages = defineMessages({
+	onlineAnalysis: {
+		id: 'app.launch-diagnostic.online-analysis',
+		defaultMessage: 'Send current log to mclo.gs for analysis',
+	},
+	noResult: {
+		id: 'app.launch-diagnostic.no-online-result',
+		defaultMessage: 'No diagnosis was returned for this log.',
+	},
+})
 const { handleError } = injectNotificationManager()
 const instancePage = injectInstancePage()
 const instanceId = instancePage.instanceId
@@ -109,19 +131,37 @@ watchEffect(() => {
 })
 
 const crashAnalysis = ref(null)
+const analysisUnavailable = ref(false)
+const analysing = ref(false)
+const canAnalyse = computed(
+	() =>
+		!instancePage.offline.value &&
+		!instancePage.playing.value &&
+		liveConsole.output.value.length > 0,
+)
+let onlineAnalysisVersion = 0
 
 async function analyseForCrash() {
-	const lines = liveConsole.output.value
-	if (lines.length === 0) return
-
-	const content = lines.map((l) => l.text).join('\n')
+	if (!canAnalyse.value || analysing.value) return
+	const analysisVersion = ++onlineAnalysisVersion
+	const content = liveConsole.output.value
+		.slice(-1000)
+		.map((line) => line.text)
+		.join('\n')
+	analysing.value = true
+	analysisUnavailable.value = false
 	try {
 		const data = await client.mclogs.insights_v1.analyse(content)
+		if (onlineAnalysisVersion !== analysisVersion) return
 		if (data.analysis?.problems?.length > 0) {
 			crashAnalysis.value = data
+		} else {
+			analysisUnavailable.value = true
 		}
-	} catch {
-		// Crash analysis is best-effort
+	} catch (error) {
+		if (onlineAnalysisVersion === analysisVersion) handleError(error)
+	} finally {
+		if (onlineAnalysisVersion === analysisVersion) analysing.value = false
 	}
 }
 
@@ -187,10 +227,6 @@ watch(selectedLogIndex, async (newIndex) => {
 
 selectedLogIndex.value = 0
 
-if (!instancePage.playing.value) {
-	void analyseForCrash()
-}
-
 useAppEvent('log', (payload) => {
 	if (payload.instance_id !== instanceId.value) return
 
@@ -204,6 +240,10 @@ useAppEvent('log', (payload) => {
 useAppEvent('process', async (e) => {
 	if (e.instance_id !== instanceId.value) return
 	if (e.event === 'launched') {
+		onlineAnalysisVersion++
+		analysing.value = false
+		analysisUnavailable.value = false
+		crashAnalysis.value = null
 		liveConsole.clear()
 		invalidate()
 		void historicalLogsQuery.refetch()
@@ -213,7 +253,6 @@ useAppEvent('process', async (e) => {
 		invalidate()
 		const { data } = await historicalLogsQuery.refetch()
 		if (data) logs.value = buildLogList(data)
-		void analyseForCrash()
 	}
 })
 </script>

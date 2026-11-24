@@ -21,6 +21,13 @@
 			</div>
 		</template>
 		<template v-else>
+			<Button
+				v-if="importProvider.openLauncherDirectoryImport"
+				class="w-fit"
+				@click="openLauncherDirectoryImport"
+			>
+				{{ formatMessage(messages.launcherDirectoryImport) }}
+			</Button>
 			<!-- Search -->
 			<Input
 				v-if="ctx.importLaunchers.value.length > 0"
@@ -135,6 +142,10 @@ const messages = defineMessages({
 	detectingLauncherInstances: {
 		id: 'creation-flow.modal.import-instance.detecting-launcher-instances',
 		defaultMessage: 'Detecting launcher instances...',
+	},
+	launcherDirectoryImport: {
+		id: 'app.external-import.launcher-title',
+		defaultMessage: 'Import from PCL2, PCL-CE, or HMCL',
 	},
 	searchInstanceNamePlaceholder: {
 		id: 'creation-flow.modal.import-instance.search.placeholder',
@@ -300,6 +311,11 @@ async function browseForLauncherPath() {
 	if (path) {
 		newLauncherPath.value = path
 	}
+}
+
+function openLauncherDirectoryImport() {
+	ctx.modal.value?.hide()
+	importProvider.openLauncherDirectoryImport?.()
 }
 
 async function addLauncherPath() {

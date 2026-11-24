@@ -222,7 +222,11 @@ function show(tabIndex?: number) {
 	}
 }
 
-defineExpose({ show, hide })
+function showJava() {
+	show(tabs.value.filter((tab) => tab.shown !== false).findIndex((tab) => tab.content === JavaSettings))
+}
+
+defineExpose({ show, hide, showJava })
 </script>
 <template>
 	<TabbedModal

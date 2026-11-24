@@ -127,6 +127,42 @@ pub struct State {
 }
 
 impl State {
+    #[cfg(test)]
+    pub(crate) async fn isolated_install_test_state(root: &std::path::Path) -> crate::Result<Self> {
+        let directories = DirectoryInfo {
+            settings_dir: root.to_owned(),
+            config_dir: root.to_owned(),
+            app_identifier: "acl-isolated-install-test".into(),
+        };
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(root.join("test.db"))
+                    .create_if_missing(true),
+            )
+            .await?;
+        sqlx::migrate!().run(&pool).await?;
+        let process_lock = content_store::ContentStore::lock_process(root).await?;
+        let content_store =
+            content_store::ContentStore::new(&directories, pool.clone(), process_lock).await?;
+        Ok(Self {
+            startup_complete: AtomicBool::new(false),
+            directories,
+            content_store,
+            fetch_semaphore: FetchSemaphore(Semaphore::new(1)),
+            io_semaphore: IoSemaphore(Semaphore::new(1)),
+            api_semaphore: FetchSemaphore(Semaphore::new(1)),
+            installs: Installs::new(),
+            instance_locks: InstanceLocks::default(),
+            synced_options: SyncedOptions::default(),
+            presence: Presence::init()?,
+            process_manager: ProcessManager::new(),
+            restart_after_pending_update: AtomicBool::new(false),
+            pool,
+            file_watcher: instances::watcher::init_watcher().await?,
+        })
+    }
+
     pub async fn init(app_identifier: String) -> crate::Result<()> {
         let _startup = STATE_STARTUP_LOCK.lock().await;
         let result = LAUNCHER_STATE

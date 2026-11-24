@@ -14,6 +14,13 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             get_default_user,
             set_default_user,
             get_users,
+            get_offline_users,
+            create_offline_user,
+            get_external_users,
+            discover_external_server,
+            begin_external_login,
+            choose_external_profile,
+            discard_external_login,
         ])
         .build()
 }
@@ -103,4 +110,40 @@ pub async fn set_default_user(user: uuid::Uuid) -> Result<()> {
 #[tauri::command]
 pub async fn get_users() -> Result<Vec<Credentials>> {
     Ok(minecraft_auth::users().await?)
+}
+
+#[tauri::command]
+pub async fn get_offline_users() -> Result<Vec<minecraft_auth::OfflineAccount>> {
+    Ok(minecraft_auth::offline_accounts().await?)
+}
+
+#[tauri::command]
+pub async fn create_offline_user(name: &str) -> Result<minecraft_auth::OfflineAccount> {
+    Ok(minecraft_auth::add_offline_account(name).await?)
+}
+
+#[tauri::command]
+pub async fn get_external_users() -> Result<Vec<minecraft_auth::ExternalAccount>> {
+    Ok(minecraft_auth::external_accounts().await?)
+}
+
+#[tauri::command]
+pub async fn discover_external_server(address: &str) -> Result<minecraft_auth::ExternalAuthServer> {
+    Ok(minecraft_auth::discover_external_server(address).await?)
+}
+
+#[tauri::command]
+pub async fn begin_external_login(api_root: &str, username: &str, password: &str) -> Result<minecraft_auth::ExternalLogin> {
+    Ok(minecraft_auth::begin_external_login(api_root, username, password).await?)
+}
+
+#[tauri::command]
+pub async fn choose_external_profile(login_id: uuid::Uuid, profile_id: uuid::Uuid) -> Result<()> {
+    Ok(minecraft_auth::choose_external_profile(login_id, profile_id).await?)
+}
+
+#[tauri::command]
+pub async fn discard_external_login(login_id: uuid::Uuid) -> Result<()> {
+    minecraft_auth::discard_external_login(login_id).await;
+    Ok(())
 }

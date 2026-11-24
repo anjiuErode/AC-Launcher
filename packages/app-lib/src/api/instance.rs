@@ -1,5 +1,7 @@
 //! Theseus instance management interface
 
+pub(crate) mod archive_io;
+mod archive;
 mod content;
 mod export_mrpack;
 mod files;
@@ -14,21 +16,28 @@ mod groups;
 mod icon;
 mod install;
 mod lifecycle;
+pub(crate) mod optifine;
 mod paths;
 mod projects;
 mod run;
 mod screenshot_groups;
 mod screenshots;
+mod schematics;
 mod shared;
 mod synced_options;
+mod version_switch;
 pub(crate) mod synced_packs;
 pub(crate) mod synced_servers;
 
 pub use self::content::{
-    get_content_items, get_dependencies_as_content_items,
+    get_content_items, get_file_manager_content, get_dependencies_as_content_items,
     get_install_candidates, get_installed_project_ids,
     get_linked_modpack_content, get_linked_modpack_info, get_projects,
     list_content_sets, refresh_content_updates, sync_content_files,
+};
+pub use self::archive::{export_instance_archive, restore_instance_archive};
+pub use self::version_switch::{
+    VersionSwitchContent, preview_instance_version_switch, switch_instance_version,
 };
 pub use self::export_mrpack::{
     PackExportCandidate, create_mrpack_json, export_mrpack,
@@ -50,6 +59,7 @@ pub(crate) use self::icon::{
 pub use self::install::get_optimal_jre_key;
 pub(crate) use self::lifecycle::create;
 pub use self::lifecycle::{edit, remove, set_synced_option};
+pub use self::optifine::{OptiFineState, install_optifine, optifine_status};
 pub use self::paths::{get_full_path, get_mod_full_path};
 pub use self::projects::{
     InstallProjectWithDependenciesRequest, add_project_from_path,
@@ -73,6 +83,10 @@ pub use self::screenshots::{
     delete_screenshots, export_screenshots, get_screenshot_path,
     list_all_screenshots, list_screenshots, list_synced_screenshots,
     move_screenshots, save_edited_screenshot,
+};
+pub use self::schematics::{
+	SchematicDetails, SchematicFile, delete_schematic,
+	get_schematic_details, list_schematics,
 };
 pub(crate) use self::shared::{
     CONFIG_BUNDLE_FILE_TYPE, CONFIG_DIRECTORY, CONFIG_FILE_EXTENSIONS,

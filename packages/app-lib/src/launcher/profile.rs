@@ -70,7 +70,9 @@ pub fn merge_partial_version(
     if let Some(main_class) = partial.main_class {
         version.main_class = main_class;
     }
-    version.minecraft_arguments = partial.minecraft_arguments;
+    if let Some(arguments) = partial.minecraft_arguments {
+        version.minecraft_arguments = Some(arguments);
+    }
     version.release_time = partial.release_time;
     version.time = partial.time;
     version.ty = partial.ty;

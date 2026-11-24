@@ -4,7 +4,7 @@
 		class="flex flex-col gap-3 bg-button-bg border border-solid border-surface-5 rounded-xl p-3 mt-2"
 	>
 		<span>{{ formatMessage(messages.notSignedIn) }}</span>
-		<Button type="colored" color="brand" :disabled="loginDisabled" @click="login()">
+		<Button type="colored" color="brand" :disabled="loginDisabled" @click="emit('sign-in')">
 			<LogInIcon v-if="!loginDisabled" />
 			<SpinnerIcon v-else class="animate-spin" />
 			{{ formatMessage(messages.signInToMinecraft) }}
@@ -30,7 +30,13 @@
 					<span class="truncate w-full text-left">{{
 						selectedAccount ? selectedAccount.profile.name : formatMessage(messages.selectAccount)
 					}}</span>
-					<span class="text-secondary text-xs">{{ formatMessage(messages.minecraftAccount) }}</span>
+					<span class="truncate text-secondary text-xs" :title="selectedAccount?.server?.api_root">
+						{{
+							selectedAccount
+								? accountLabel(selectedAccount)
+								: formatMessage(messages.minecraftAccount)
+						}}
+					</span>
 				</div>
 			</div>
 		</template>
@@ -56,6 +62,13 @@
 							"
 						>
 							{{ account.profile.name }}
+							<span
+								v-if="account.kind"
+								class="text-secondary text-xs"
+								:title="account.server?.api_root"
+							>
+								{{ accountLabel(account) }}
+							</span>
 						</p>
 					</button>
 					<IconButton
@@ -75,7 +88,7 @@
 					v-if="accounts.length > 0"
 					class="w-full !bg-button-bg !text-primary ![box-shadow:var(--shadow-button)]"
 					:disabled="loginDisabled"
-					@click="login()"
+					@click="emit('sign-in')"
 				>
 					<PlusIcon />
 					{{ formatMessage(messages.addAccount) }}
@@ -107,15 +120,9 @@ import type { Ref } from 'vue'
 import { computed, onUnmounted, ref } from 'vue'
 
 import { useAppEvent } from '@/composables/use-app-event'
-import { handleSevereError } from '@/composables/use-error.js'
 import { trackEvent } from '@/helpers/analytics'
-import {
-	get_default_user,
-	login as login_flow,
-	remove_user,
-	set_default_user,
-	users,
-} from '@/helpers/auth'
+import { get_default_user, offline_users, remove_user, set_default_user, users } from '@/helpers/auth'
+import { type ExternalAuthServer, getExternalAccounts } from '@/helpers/external-auth'
 import { getPlayerHeadUrl } from '@/helpers/rendering/player-head'
 import type { Skin } from '@/helpers/skins'
 import { get_available_skins } from '@/helpers/skins'
@@ -125,9 +132,12 @@ const { handleError } = injectNotificationManager()
 
 const emit = defineEmits<{
 	change: []
+	'sign-in': []
 }>()
 
 type MinecraftCredential = {
+	kind?: string
+	server?: ExternalAuthServer
 	profile: {
 		id: string
 		name: string
@@ -139,6 +149,7 @@ const loginDisabled = ref(false)
 const defaultUser = ref<string | undefined>()
 const equippedSkin = ref<Skin | null>(null)
 const equippedHeadUrl = ref<string>()
+const hasAccounts = computed(() => accounts.value.length > 0)
 let headRequest = 0
 
 async function updateHeadUrl(skin: Skin | null) {
@@ -158,11 +169,26 @@ onUnmounted(() => {
 
 async function refreshValues() {
 	defaultUser.value = await get_default_user().catch(handleError)
-	const userList = await users().catch(handleError)
-	accounts.value = Array.isArray(userList) ? [...userList] : []
+	const [onlineList, offlineList, externalList] = await Promise.all([
+		users().catch(handleError),
+		offline_users().catch(handleError),
+		getExternalAccounts().catch(handleError),
+	])
+	accounts.value = [
+		...(Array.isArray(onlineList) ? onlineList : []),
+		...(Array.isArray(offlineList) ? offlineList : []),
+		...(Array.isArray(externalList) ? externalList : []),
+	]
 	accounts.value.sort((a, b) => (a.profile?.name ?? '').localeCompare(b.profile?.name ?? ''))
 
 	try {
+		if (
+			accounts.value.some((account) => account.profile.id === defaultUser.value && account.kind)
+		) {
+			equippedSkin.value = null
+			void updateHeadUrl(null)
+			return
+		}
 		const skins = await get_available_skins()
 		equippedSkin.value = skins.find((skin) => skin.is_equipped) ?? null
 
@@ -188,10 +214,10 @@ function setLoginDisabled(value: boolean) {
 }
 
 defineExpose({
+	hasAccounts,
 	refreshValues,
 	setEquippedSkin,
 	setLoginDisabled,
-	login,
 	loginDisabled,
 })
 
@@ -202,6 +228,9 @@ const selectedAccount = computed(() =>
 )
 
 const avatarUrl = computed(() => {
+	if (selectedAccount.value?.kind) {
+		return 'https://launcher-files.modrinth.com/assets/steve_head.png'
+	}
 	if (equippedSkin.value?.texture_key) {
 		const cachedUrl = equippedHeadUrl.value
 		if (cachedUrl) {
@@ -216,6 +245,7 @@ const avatarUrl = computed(() => {
 })
 
 function getAccountAvatarUrl(account: MinecraftCredential) {
+	if (account.kind) return 'https://launcher-files.modrinth.com/assets/steve_head.png'
 	if (
 		account.profile.id === selectedAccount.value?.profile?.id &&
 		equippedSkin.value?.texture_key
@@ -228,23 +258,20 @@ function getAccountAvatarUrl(account: MinecraftCredential) {
 	return `https://mc-heads.net/avatar/${account.profile.id}/128`
 }
 
+function accountLabel(account: MinecraftCredential) {
+	if (account.kind === 'external' && account.server) {
+		return account.server.name || account.server.api_root
+	}
+	return formatMessage(
+		account.kind === 'offline' ? messages.offlineAccount : messages.minecraftAccount,
+	)
+}
+
 async function setAccount(account: MinecraftCredential) {
 	defaultUser.value = account.profile.id
 	await set_default_user(account.profile.id).catch(handleError)
 	await refreshValues()
 	emit('change')
-}
-
-async function login() {
-	loginDisabled.value = true
-	const loggedIn = await login_flow().catch(handleSevereError)
-
-	if (loggedIn) {
-		await setAccount(loggedIn)
-	}
-
-	trackEvent('AccountLogIn')
-	loginDisabled.value = false
 }
 
 async function logout(id: string) {
@@ -265,6 +292,7 @@ useAppEvent('process', async (e) => {
 })
 
 const messages = defineMessages({
+	offlineAccount: { id: 'app.offline-account.label', defaultMessage: 'Offline player' },
 	notSignedIn: {
 		id: 'minecraft-account.not-signed-in',
 		defaultMessage: 'Not signed in',

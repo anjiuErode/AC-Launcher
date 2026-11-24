@@ -9,6 +9,7 @@ import {
 	list_synced_screenshots,
 } from '@/helpers/instance'
 import { loadInstanceContentData } from '@/helpers/instance-content'
+import { get_file_manager_content } from '@/helpers/instance'
 import { get_by_instance_id } from '@/helpers/process'
 import { refreshWorlds } from '@/helpers/worlds'
 
@@ -18,6 +19,7 @@ export const instanceKeys = {
 	detail: (instanceId: string) => [...instanceKeys.all, 'summary', instanceId] as const,
 	processes: (instanceId: string) => [...instanceKeys.all, 'processes', instanceId] as const,
 	content: (instanceId: string) => [...instanceKeys.all, 'content', instanceId] as const,
+	fileManagerContent: (instanceId: string) => [...instanceKeys.all, 'file-manager-content', instanceId] as const,
 	contentSync: (instanceId: string) => [...instanceKeys.all, 'content-sync', instanceId] as const,
 	contentUpdateCheck: (instanceId: string) =>
 		[...instanceKeys.all, 'content-update-check', instanceId] as const,
@@ -117,6 +119,15 @@ export function instanceContentQueryOptions(
 		queryKey: instanceKeys.content(instanceId),
 		networkMode: 'always',
 		queryFn: () => loadInstanceContentData(instanceId, undefined, onError),
+		staleTime: 30_000,
+	})
+}
+
+export function instanceFileManagerContentQueryOptions(instanceId: string) {
+	return queryOptions({
+		queryKey: instanceKeys.fileManagerContent(instanceId),
+		networkMode: 'always',
+		queryFn: () => get_file_manager_content(instanceId),
 		staleTime: 30_000,
 	})
 }

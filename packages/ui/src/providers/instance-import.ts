@@ -17,6 +17,7 @@ export interface InstanceImportProvider {
 	) => Promise<void>
 	/** Open a directory picker (platform-specific) */
 	selectDirectory: () => Promise<string | null>
+	openLauncherDirectoryImport?: () => void
 }
 
 export const [injectInstanceImport, provideInstanceImport] =

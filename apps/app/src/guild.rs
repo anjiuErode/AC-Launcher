@@ -16,9 +16,10 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::io::{ErrorKind, SeekFrom};
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex, MutexGuard};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 /// 官网授权页地址
@@ -50,18 +51,36 @@ impl From<&GuildSession> for PublicSession {
 	}
 }
 
-fn session_path(identifier: &str) -> Option<PathBuf> {
-	crate::app_config_dir_for(identifier).map(|dir| dir.join("guild_session.json"))
+static SESSION_FILE: Mutex<()> = Mutex::new(());
+
+fn lock_session_file() -> Result<MutexGuard<'static, ()>, String> {
+	SESSION_FILE.lock().map_err(|error| error.to_string())
 }
 
-fn read_session(identifier: &str) -> Option<GuildSession> {
-	let path = session_path(identifier)?;
-	let raw = std::fs::read_to_string(path).ok()?;
-	serde_json::from_str(&raw).ok()
+fn session_path(identifier: &str) -> Result<PathBuf, String> {
+	crate::app_config_dir_for(identifier)
+		.map(|dir| dir.join("guild_session.json"))
+		.ok_or_else(|| "无法定位应用配置目录".to_string())
+}
+
+fn read_session_file(path: &Path) -> Result<Option<GuildSession>, String> {
+	match std::fs::read_to_string(path) {
+		Ok(raw) => serde_json::from_str(&raw)
+			.map(Some)
+			.map_err(|error| error.to_string()),
+		Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+		Err(error) => Err(error.to_string()),
+	}
+}
+
+fn read_session(identifier: &str) -> Result<Option<GuildSession>, String> {
+	let _guard = lock_session_file()?;
+	read_session_file(&session_path(identifier)?)
 }
 
 fn write_session(identifier: &str, session: &GuildSession) -> Result<(), String> {
-	let path = session_path(identifier).ok_or_else(|| "无法定位应用配置目录".to_string())?;
+	let _guard = lock_session_file()?;
+	let path = session_path(identifier)?;
 	if let Some(parent) = path.parent() {
 		std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
 	}
@@ -69,13 +88,53 @@ fn write_session(identifier: &str, session: &GuildSession) -> Result<(), String>
 	std::fs::write(path, raw).map_err(|e| e.to_string())
 }
 
+fn remove_session_file(path: &Path) -> Result<(), String> {
+	match std::fs::remove_file(path) {
+		Ok(()) => Ok(()),
+		Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+		Err(error) => Err(error.to_string()),
+	}
+}
+
 fn clear_session(identifier: &str) -> Result<(), String> {
-	if let Some(path) = session_path(identifier) {
-		if path.exists() {
-			std::fs::remove_file(path).map_err(|e| e.to_string())?;
-		}
+	let _guard = lock_session_file()?;
+	remove_session_file(&session_path(identifier)?)
+}
+
+fn clear_expired_session(identifier: &str, expired_token: &str) -> Result<(), String> {
+	let _guard = lock_session_file()?;
+	let path = session_path(identifier)?;
+	// 请求等待官网响应期间，用户可能已经登录了新的会话。
+	if read_session_file(&path)?.is_some_and(|session| session.token == expired_token) {
+		remove_session_file(&path)?;
 	}
 	Ok(())
+}
+
+#[cfg(test)]
+mod session_file_tests {
+	use super::*;
+
+	#[test]
+	fn removal_is_idempotent_for_missing_session_file() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("guild_session.json");
+		assert!(read_session_file(&path).unwrap().is_none());
+		std::fs::write(&path, "test session file").unwrap();
+		remove_session_file(&path).unwrap();
+		remove_session_file(&path).unwrap();
+		assert!(read_session_file(&path).unwrap().is_none());
+	}
+
+	#[test]
+	fn invalid_session_files_report_errors() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("guild_session.json");
+		std::fs::write(&path, "invalid JSON").unwrap();
+		assert!(read_session_file(&path).is_err());
+		assert!(read_session_file(temp.path()).is_err());
+		assert!(remove_session_file(temp.path()).is_err());
+	}
 }
 
 /// 简易百分号解码，够用于 display name 这类字段
@@ -265,9 +324,9 @@ async fn accept_loop(listener: TcpListener, expected_state: &str) -> Result<Guil
 	}
 }
 
-/// 当前会话；令牌有效性由官网接口判定，这里只在本地缺失时返回 None
-pub fn current(identifier: &str) -> Option<PublicSession> {
-	read_session(identifier).map(|session| PublicSession::from(&session))
+/// 令牌有效性由官网接口判定，本地读取仅在会话文件缺失时返回 None。
+pub fn current(identifier: &str) -> Result<Option<PublicSession>, String> {
+	Ok(read_session(identifier)?.as_ref().map(PublicSession::from))
 }
 
 pub fn sign_out(identifier: &str) -> Result<(), String> {
@@ -296,6 +355,12 @@ fn api_error(code: &'static str, message: impl Into<String>) -> GuildApiError {
 		code,
 		message: message.into(),
 	}
+}
+
+fn require_session(identifier: &str) -> Result<GuildSession, GuildApiError> {
+	read_session(identifier)
+		.map_err(|_| api_error("io", "无法读取本地公会会话"))?
+		.ok_or_else(|| api_error("not_signed_in", "尚未登录公会账号"))
 }
 
 /// 服务端形如 `{ "items": [...] }` 的列表响应
@@ -368,8 +433,7 @@ async fn get_json<T: DeserializeOwned>(
 	identifier: &str,
 	path: &str,
 ) -> Result<T, GuildApiError> {
-	let session = read_session(identifier)
-		.ok_or_else(|| api_error("not_signed_in", "尚未登录公会账号"))?;
+	let session = require_session(identifier)?;
 
 	let response = theseus::REQWEST_CLIENT
 		.get(format!("{API_BASE}{path}"))
@@ -381,8 +445,7 @@ async fn get_json<T: DeserializeOwned>(
 
 	let status = response.status();
 	if status.as_u16() == 401 {
-		// 契约：401 一律视为会话失效，清掉本地登录态让用户重新登录
-		let _ = clear_session(identifier);
+		let _ = clear_expired_session(identifier, &session.token);
 		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
 	}
 
@@ -511,6 +574,7 @@ pub struct PresenceState {
 
 static PRESENCE_STATE: LazyLock<Mutex<PresenceState>> =
 	LazyLock::new(|| Mutex::new(PresenceState::default()));
+static PRESENCE_REPORT: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// 成员列表里的一个人
 #[derive(Debug, Deserialize, Serialize)]
@@ -587,8 +651,7 @@ async fn post_json(
 	path: &str,
 	body: &serde_json::Value,
 ) -> Result<(), GuildApiError> {
-	let session = read_session(identifier)
-		.ok_or_else(|| api_error("not_signed_in", "尚未登录公会账号"))?;
+	let session = require_session(identifier)?;
 
 	let response = theseus::REQWEST_CLIENT
 		.post(format!("{API_BASE}{path}"))
@@ -601,7 +664,7 @@ async fn post_json(
 
 	let status = response.status();
 	if status.as_u16() == 401 {
-		let _ = clear_session(identifier);
+		let _ = clear_expired_session(identifier, &session.token);
 		return Err(api_error("unauthorized", "登录已过期，请重新登录"));
 	}
 	// 客户端每 30 秒一次，服务端 10 秒内重复会回 429 —— 这是正常节奏，不该当错误
@@ -624,6 +687,8 @@ async fn post_json(
 
 /// 上报一次在线状态。返回 false 表示当前没有在玩游戏（未发送）。
 pub async fn report_presence(identifier: &str) -> Result<bool, GuildApiError> {
+	// 排队的上报在真正发送前获取最新状态，本地状态更新不等待网络。
+	let _report = PRESENCE_REPORT.lock().await;
 	let state = presence_snapshot();
 	if !state.running {
 		return Ok(false);
@@ -729,12 +794,13 @@ fn detect_loader_from_libraries(value: &serde_json::Value) -> Option<(&'static s
 	None
 }
 
-/// 下载整合包：写入 `.part`，校验通过后原子改名；任何失败路径都清理临时文件。
+/// 下载整合包，校验完成后原子保存，失败时清理临时文件。
 pub async fn download_pack(
 	url: &str,
 	sha256: &str,
 	filename: &str,
 ) -> Result<GuildPackFile, GuildApiError> {
+	use futures_util::StreamExt;
 	use sha2::{Digest, Sha256};
 
 	if !url.starts_with("https://") {
@@ -745,71 +811,79 @@ pub async fn download_pack(
 	tokio::fs::create_dir_all(&dir)
 		.await
 		.map_err(|err| api_error("io", format!("无法创建临时目录：{err}")))?;
-	let final_path = dir.join(sanitize_filename(filename));
-	let part_path = dir.join(format!("{}.part", sanitize_filename(filename)));
-
-	let response = theseus::REQWEST_CLIENT
+	let download = theseus::REQWEST_CLIENT
 		.get(url)
-		.timeout(std::time::Duration::from_secs(900))
-		.send()
-		.await
-		.map_err(|err| api_error("network", format!("无法下载整合包：{err}")))?;
+		.timeout(std::time::Duration::from_secs(900));
+	let clone_request = || {
+		download
+			.try_clone()
+			.ok_or_else(|| api_error("bad_request", "整合包下载请求无效"))
+	};
+	let receive = async || {
+		let response = clone_request()?
+			.send()
+			.await
+			.map_err(|_| api_error("network", "无法下载整合包"))?;
+		if !response.status().is_success() {
+			return Err(api_error(
+				"server",
+				format!("整合包下载失败：官网返回 {}", response.status()),
+			));
+		}
+		if let Some(len) = response.content_length()
+			&& len > MAX_DOWNLOAD_BYTES
+		{
+			return Err(api_error(
+				"too_large",
+				format!("整合包体积超出上限（{len} 字节）"),
+			));
+		}
+		Ok(response)
+	};
+	let response = receive().await?;
 
-	if !response.status().is_success() {
-		return Err(api_error(
-			"server",
-			format!("整合包下载失败：官网返回 {}", response.status()),
-		));
-	}
-	if let Some(len) = response.content_length()
-		&& len > MAX_DOWNLOAD_BYTES
-	{
-		return Err(api_error(
-			"too_large",
-			format!("整合包体积超出上限（{len} 字节）"),
-		));
-	}
-
-	let mut file = tokio::fs::File::create(&part_path)
-		.await
+	let temporary = tempfile::NamedTempFile::new_in(&dir)
 		.map_err(|err| api_error("io", format!("无法写入临时文件：{err}")))?;
+	let (file, temporary_path) = temporary.into_parts();
+	let mut file = tokio::fs::File::from_std(file);
 	let mut hasher = Sha256::new();
 	let mut size: u64 = 0;
-	let mut response = response;
-
-	let download_result: Result<(), GuildApiError> = async {
-		loop {
-			let chunk = response
-				.chunk()
-				.await
-				.map_err(|err| api_error("network", format!("下载中断：{err}")))?;
-			let Some(chunk) = chunk else { break };
-			size += chunk.len() as u64;
-			if size > MAX_DOWNLOAD_BYTES {
-				return Err(api_error("too_large", "整合包体积超出上限"));
+	let mut body = theseus::download_body(clone_request()?, response).await;
+	while let Some(chunk) = body.stream.next().await {
+		let chunk = match chunk {
+			Ok(chunk) => chunk,
+			Err(_) if body.is_segmented() => {
+				drop(body);
+				body = theseus::DownloadBody::sequential(receive().await?);
+				file.set_len(0)
+					.await
+					.map_err(|err| api_error("io", format!("无法重新写入临时文件：{err}")))?;
+				file.seek(SeekFrom::Start(0))
+					.await
+					.map_err(|err| api_error("io", format!("无法重新写入临时文件：{err}")))?;
+				size = 0;
+				hasher = Sha256::new();
+				continue;
 			}
-			hasher.update(&chunk);
-			file.write_all(&chunk)
-				.await
-				.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
+			Err(_) => return Err(api_error("network", "下载中断")),
+		};
+		size += chunk.len() as u64;
+		if size > MAX_DOWNLOAD_BYTES {
+			return Err(api_error("too_large", "整合包体积超出上限"));
 		}
-		file.flush()
+		hasher.update(&chunk);
+		file.write_all(&chunk)
 			.await
 			.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
-		Ok(())
 	}
-	.await;
+	file.flush()
+		.await
+		.map_err(|err| api_error("io", format!("写入失败：{err}")))?;
 	drop(file);
 
-	if let Err(err) = download_result {
-		let _ = tokio::fs::remove_file(&part_path).await;
-		return Err(err);
-	}
-
+	let actual = format!("{:x}", hasher.finalize());
 	if !sha256.is_empty() {
-		let actual = format!("{:X}", hasher.finalize());
 		if !actual.eq_ignore_ascii_case(sha256.trim()) {
-			let _ = tokio::fs::remove_file(&part_path).await;
 			return Err(api_error(
 				"checksum",
 				format!("整合包校验失败（期望 {sha256}，实际 {actual}），已丢弃下载文件"),
@@ -819,11 +893,12 @@ pub async fn download_pack(
 		tracing::warn!("Guild pack {filename} has no sha256; integrity not verified");
 	}
 
-	if tokio::fs::try_exists(&final_path).await.unwrap_or(false) {
-		let _ = tokio::fs::remove_file(&final_path).await;
-	}
-	tokio::fs::rename(&part_path, &final_path)
+	let cache_dir = dir.join(actual);
+	tokio::fs::create_dir_all(&cache_dir)
 		.await
+		.map_err(|err| api_error("io", format!("无法创建临时目录：{err}")))?;
+	let final_path = cache_dir.join(sanitize_filename(filename));
+	temporary_path.persist(&final_path)
 		.map_err(|err| api_error("io", format!("无法保存整合包：{err}")))?;
 
 	let format = detect_pack_format(&final_path).await;

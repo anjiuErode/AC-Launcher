@@ -15,6 +15,8 @@ pub struct Settings {
     pub theme: Theme,
     pub locale: String,
     pub default_page: DefaultPage,
+    #[serde(default)]
+    pub file_manager_default_tab: FileManagerDefaultTab,
     pub collapsed_navigation: bool,
     pub hide_nametag_skins_page: bool,
     pub advanced_rendering: bool,
@@ -150,6 +152,7 @@ impl Settings {
             theme: Theme::from_string(&res.theme),
             locale: res.locale,
             default_page: DefaultPage::from_string(&res.default_page),
+            file_manager_default_tab: FileManagerDefaultTab::All,
             collapsed_navigation: res.collapsed_navigation == 1,
             hide_nametag_skins_page: res.hide_nametag_skins_page == 1,
             advanced_rendering: res.advanced_rendering == 1,
@@ -494,6 +497,58 @@ pub struct Hooks {
 pub enum DefaultPage {
     Home,
     Library,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FileManagerDefaultTab {
+	#[default]
+	All,
+	Mods,
+	Resourcepacks,
+	Shaderpacks,
+	Schematics,
+}
+
+impl FileManagerDefaultTab {
+	pub fn as_str(self) -> &'static str {
+		match self {
+			Self::All => "all",
+			Self::Mods => "mods",
+			Self::Resourcepacks => "resourcepacks",
+			Self::Shaderpacks => "shaderpacks",
+			Self::Schematics => "schematics",
+		}
+	}
+
+	pub fn from_string(value: &str) -> Self {
+		match value {
+			"mods" => Self::Mods,
+			"resourcepacks" => Self::Resourcepacks,
+			"shaderpacks" => Self::Shaderpacks,
+			"schematics" => Self::Schematics,
+			_ => Self::All,
+		}
+	}
+}
+
+#[cfg(test)]
+mod file_manager_default_tab_tests {
+	use super::FileManagerDefaultTab;
+
+	#[test]
+	fn unknown_persisted_value_uses_all_files_default() {
+		assert!(matches!(
+			FileManagerDefaultTab::from_string("unknown"),
+			FileManagerDefaultTab::All
+		));
+	}
+
+	#[test]
+	fn setting_serializes_as_local_snake_case_value() {
+		let value = serde_json::to_string(&FileManagerDefaultTab::Schematics).unwrap();
+		assert_eq!(value, "\"schematics\"");
+	}
 }
 
 impl DefaultPage {

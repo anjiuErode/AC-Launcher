@@ -38,6 +38,12 @@ pub struct EmbeddedContentMetadata {
     pub name: Option<String>,
     pub version: Option<String>,
     pub icon_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authors: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mod_id: Option<String>,
 }
 
 impl EmbeddedContentMetadata {
@@ -45,6 +51,9 @@ impl EmbeddedContentMetadata {
         self.name.is_none()
             && self.version.is_none()
             && self.icon_path.is_none()
+            && self.description.is_none()
+            && self.authors.is_none()
+            && self.mod_id.is_none()
     }
 }
 

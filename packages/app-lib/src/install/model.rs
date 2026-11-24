@@ -1,5 +1,6 @@
 use crate::LabrinthError;
 use crate::api::pack::import::ImportLauncherType;
+use crate::api::pack::import::external::ExternalImportSource;
 use crate::api::pack::install_from::{CreatePackInstance, CreatePackLocation};
 use crate::state::{
     InstanceIconConfig, InstanceInstallStage, InstanceLink, InstanceMetadata,
@@ -182,12 +183,18 @@ pub enum InstallRequest {
         base_path: PathBuf,
         instance_folder: String,
     },
+    ImportExternalInstance {
+        source: ExternalImportSource,
+        title: String,
+    },
     DuplicateInstance {
         source_instance_id: String,
     },
     InstallExistingInstance {
         instance_id: String,
         force: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version_switch: Option<InstanceVersionSwitch>,
     },
     InstallPackToExistingInstance {
         instance_id: String,
@@ -203,6 +210,14 @@ pub enum InstallRequest {
         instance_id: String,
         updates: Vec<ContentUpdateSelection>,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InstanceVersionSwitch {
+    pub game_version: String,
+    pub loader: ModLoader,
+    pub loader_version: Option<String>,
+    pub disable_mods: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -276,7 +291,7 @@ impl InstallRequest {
             Self::CreateSharedInstance { .. } => {
                 InstallJobKind::CreateSharedInstance
             }
-            Self::ImportInstance { .. } => InstallJobKind::ImportInstance,
+            Self::ImportInstance { .. } | Self::ImportExternalInstance { .. } => InstallJobKind::ImportInstance,
             Self::DuplicateInstance { .. } => InstallJobKind::DuplicateInstance,
             Self::InstallExistingInstance { .. } => {
                 InstallJobKind::InstallExistingInstance

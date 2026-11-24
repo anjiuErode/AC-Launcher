@@ -48,6 +48,9 @@ export interface EmbeddedContentMetadata {
 	version?: string | null
 	icon_path?: string | null
 	icon_url?: string | null
+	description?: string | null
+	authors?: string[] | null
+	mod_id?: string | null
 }
 
 export interface ContentCardTableItem {

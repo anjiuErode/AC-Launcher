@@ -40,6 +40,8 @@ struct SharedInstanceUpdateRollback {
     #[serde(default)]
     copied_file_ids: std::collections::HashSet<String>,
     #[serde(default)]
+    locked_file_ids: std::collections::HashSet<String>,
+    #[serde(default)]
     scoped_paths: Option<Vec<String>>,
 }
 
@@ -82,11 +84,17 @@ pub(super) async fn prepare_instance_update_backup(
             &state.pool,
         )
         .await?;
-        let entries = content_rows::get_content_entries(
-            &metadata.applied_content_set.id,
+        let mut entries = Vec::new();
+        for set in content_rows::get_content_sets_for_instance(
+            &metadata.instance.id,
             &state.pool,
-        )
-        .await?;
+        ).await? {
+            entries.extend(content_rows::get_content_entries(&set.id, &state.pool).await?);
+        }
+        let locked_file_ids = content_rows::get_locked_instance_file_ids(
+            &metadata.instance.id,
+            &state.pool,
+        ).await?;
         let bindings = crate::state::content_store::instance_storage(
             &state.pool,
             &metadata.instance.id,
@@ -173,6 +181,7 @@ pub(super) async fn prepare_instance_update_backup(
             bindings,
 			missing_file_ids,
 			copied_file_ids,
+            locked_file_ids,
             scoped_paths,
         };
         crate::util::io::write(
@@ -270,7 +279,7 @@ pub(super) async fn clear_staging_dir(
     }
 }
 
-async fn restore_instance_update(
+pub(super) async fn restore_instance_update(
     staging_dir: &Path,
     rollback: &super::model::InstallRollbackState,
     state: &State,
@@ -365,6 +374,7 @@ async fn restore_instance_update(
         &rollback.instance.instance.id,
         &snapshot.files,
         &snapshot.entries,
+        &snapshot.locked_file_ids,
         &state.pool,
     )
     .await?;
@@ -802,6 +812,8 @@ fn display_from_request(state: &InstallJobState) -> Option<InstallJobDisplay> {
         }
         InstallRequest::ImportInstance {
             instance_folder, ..
+        } | InstallRequest::ImportExternalInstance {
+            title: instance_folder, ..
         } => Some(InstallJobDisplay {
             title: instance_folder.clone(),
             icon: None,
