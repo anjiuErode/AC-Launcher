@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Button, defineMessages, ProgressBar, useVIntl } from '@modrinth/ui'
 import { getVersion } from '@tauri-apps/api/app'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { aclHotfixState, checkAclHotfix } from '@/providers/acl-hotfix'
 import {
 	appUpdateState,
 	checkForAppUpdate,
@@ -73,6 +75,42 @@ const messages = defineMessages({
 		id: 'app.settings.about.downloaded-hint',
 		defaultMessage: 'Update downloaded. Restart to install it.',
 	},
+	hotfixTitle: {
+		id: 'app.settings.about.hotfix-title',
+		defaultMessage: 'Hotfixes',
+	},
+	checkHotfix: {
+		id: 'app.settings.about.check-hotfix',
+		defaultMessage: 'Check for hotfixes',
+	},
+	hotfixChecking: {
+		id: 'app.settings.about.hotfix-checking',
+		defaultMessage: 'Checking for hotfixes…',
+	},
+	hotfixUnavailable: {
+		id: 'app.settings.about.hotfix-unavailable',
+		defaultMessage: 'No hotfix is available for this version.',
+	},
+	hotfixUnsupported: {
+		id: 'app.settings.about.hotfix-unsupported',
+		defaultMessage: 'Hotfix checks are unavailable in this build.',
+	},
+	hotfixFailed: {
+		id: 'app.settings.about.hotfix-failed',
+		defaultMessage: 'Could not check for hotfixes. Try again later.',
+	},
+	hotfixAvailable: {
+		id: 'app.settings.about.hotfix-available',
+		defaultMessage: 'Hotfix {version} is available for {baseVersion}.',
+	},
+	openHotfix: {
+		id: 'app.settings.about.open-hotfix',
+		defaultMessage: 'View hotfix',
+	},
+	hotfixOpenFailed: {
+		id: 'app.settings.about.hotfix-open-failed',
+		defaultMessage: 'Could not open the hotfix release page.',
+	},
 	contributorsTitle: {
 		id: 'app.settings.about.contributors-title',
 		defaultMessage: 'Contributors',
@@ -122,6 +160,27 @@ const downloaded = computed(() => appUpdateState.finishedDownloading.value)
 const progress = computed(() => appUpdateState.progress.value)
 const available = computed(() => appUpdateState.availableUpdate.value)
 const checkError = computed(() => appUpdateState.checkError.value)
+const hotfixOpenFailed = ref(false)
+const hotfixStatus = computed(() => {
+	const result = aclHotfixState.value
+	switch (result.status) {
+		case 'available':
+			return formatMessage(messages.hotfixAvailable, {
+				version: result.hotfix.version,
+				baseVersion: result.hotfix.baseVersion,
+			})
+		case 'checking':
+			return formatMessage(messages.hotfixChecking)
+		case 'failed':
+			return formatMessage(messages.hotfixFailed)
+		case 'unavailable':
+			return formatMessage(messages.hotfixUnavailable)
+		case 'unsupported':
+			return formatMessage(messages.hotfixUnsupported)
+		default:
+			return null
+	}
+})
 
 /** 手动检查的结果文案；null 表示本次尚未检查 */
 const manualResult = ref<string | null>(null)
@@ -188,6 +247,21 @@ async function installNow() {
 		setResult(formatMessage(messages.updateFailed), true)
 	}
 }
+
+watch(aclHotfixState, () => {
+	hotfixOpenFailed.value = false
+})
+
+async function openHotfix() {
+	const result = aclHotfixState.value
+	if (result.status !== 'available') return
+	hotfixOpenFailed.value = false
+	try {
+		await openUrl(result.hotfix.releaseUrl)
+	} catch {
+		hotfixOpenFailed.value = aclHotfixState.value === result
+	}
+}
 </script>
 
 <template>
@@ -247,6 +321,42 @@ async function installNow() {
 				<ProgressBar v-if="downloading" :progress="progress" />
 			</template>
 		</div>
+
+		<section class="flex flex-col gap-2.5">
+			<h3 class="m-0 text-base font-semibold text-contrast">
+				{{ formatMessage(messages.hotfixTitle) }}
+			</h3>
+			<p
+				v-if="hotfixStatus"
+				class="m-0 text-sm"
+				:class="aclHotfixState.status === 'failed' ? 'text-red' : 'text-secondary'"
+				role="status"
+			>
+				{{ hotfixStatus }}
+			</p>
+			<p
+				v-if="aclHotfixState.status === 'available' && aclHotfixState.hotfix.notes"
+				class="m-0 whitespace-pre-line break-words text-sm text-secondary"
+			>
+				{{ aclHotfixState.hotfix.notes }}
+			</p>
+			<div class="flex flex-wrap items-center gap-3">
+				<Button
+					:disabled="
+						aclHotfixState.status === 'checking' || aclHotfixState.status === 'unsupported'
+					"
+					@click="checkAclHotfix"
+				>
+					{{ formatMessage(messages.checkHotfix) }}
+				</Button>
+				<Button v-if="aclHotfixState.status === 'available'" @click="openHotfix">
+					{{ formatMessage(messages.openHotfix) }}
+				</Button>
+			</div>
+			<p v-if="hotfixOpenFailed" class="m-0 text-sm text-red" role="status">
+				{{ formatMessage(messages.hotfixOpenFailed) }}
+			</p>
+		</section>
 
 		<div class="flex flex-col gap-2.5">
 			<h3 class="m-0 text-base font-semibold text-contrast">

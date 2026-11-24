@@ -12,6 +12,7 @@ use tauri::{Listener, Manager};
 use tauri_plugin_fs::FsExt;
 use theseus::prelude::*;
 
+mod acl_hotfix;
 mod api;
 mod guild;
 
@@ -813,6 +814,7 @@ fn main() {
             initialize_state,
             is_dev,
             are_updates_enabled,
+            acl_hotfix::check_acl_hotfix,
             get_update_size,
             enqueue_update_for_installation,
             remove_enqueued_update,

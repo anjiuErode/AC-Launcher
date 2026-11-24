@@ -2417,6 +2417,9 @@
 	"app.settings.about.brand-title": {
 		"message": "Brand"
 	},
+	"app.settings.about.check-hotfix": {
+		"message": "Check for hotfixes"
+	},
 	"app.settings.about.check-update": {
 		"message": "Check for updates"
 	},
@@ -2453,8 +2456,32 @@
 	"app.settings.about.downloading": {
 		"message": "Downloading…"
 	},
+	"app.settings.about.hotfix-available": {
+		"message": "Hotfix {version} is available for {baseVersion}."
+	},
+	"app.settings.about.hotfix-checking": {
+		"message": "Checking for hotfixes…"
+	},
+	"app.settings.about.hotfix-failed": {
+		"message": "Could not check for hotfixes. Try again later."
+	},
+	"app.settings.about.hotfix-open-failed": {
+		"message": "Could not open the hotfix release page."
+	},
+	"app.settings.about.hotfix-title": {
+		"message": "Hotfixes"
+	},
+	"app.settings.about.hotfix-unavailable": {
+		"message": "No hotfix is available for this version."
+	},
+	"app.settings.about.hotfix-unsupported": {
+		"message": "Hotfix checks are unavailable in this build."
+	},
 	"app.settings.about.maintainer-title": {
 		"message": "Maintainer"
+	},
+	"app.settings.about.open-hotfix": {
+		"message": "View hotfix"
 	},
 	"app.settings.about.restart-install": {
 		"message": "Restart and install"
