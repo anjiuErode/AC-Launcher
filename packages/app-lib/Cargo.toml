@@ -26,7 +26,6 @@ async_zip = { workspace = true, features = [
   "zstd",
 ] }
 base64 = { workspace = true }
-md-5 = "0.10.6"
 bon = { workspace = true }
 bytemuck = { workspace = true, features = ["extern_crate_alloc"] }
 bytes = { workspace = true, features = ["serde"] }
@@ -55,6 +54,7 @@ indicatif = { workspace = true, optional = true }
 infer = { workspace = true }
 itertools = { workspace = true }
 json5 = { workspace = true }
+md-5 = "0.10.6"
 minecraft-meta-manifest = { workspace = true }
 modrinth-content-management = { workspace = true }
 notify = { workspace = true }

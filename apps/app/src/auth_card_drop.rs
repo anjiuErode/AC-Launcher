@@ -33,8 +33,9 @@ use windows::{
 			WindowsAndMessaging::{EnumChildWindows, IsChild, WM_DESTROY},
 		},
 	},
-	core::{BOOL, Ref, Result, implement},
+	core::{BOOL, Ref, Result},
 };
+use windows_core::implement;
 
 const CARD_PREFIX: &str = "authlib-injector:yggdrasil-server:";
 const MAX_CARD_LENGTH: usize = 8192;
@@ -336,10 +337,10 @@ impl Medium {
 fn global_format(format: u16) -> FORMATETC {
 	FORMATETC {
 		cfFormat: format,
-		ptd: ptr::null_mut(),
 		dwAspect: DVASPECT_CONTENT.0,
 		lindex: -1,
 		tymed: TYMED_HGLOBAL.0 as u32,
+		..Default::default()
 	}
 }
 

@@ -168,7 +168,7 @@ fn extension(path: &Path) -> Option<String> {
 }
 
 fn is_schematic(path: &Path) -> bool {
-	matches!(extension(path).as_deref(), Some("litematic" | "schematic" | "schem"))
+	matches!(extension(path).as_deref(), Some("litematic" | "schematic" | "schem")) // typos:ignore
 }
 
 fn parse_schematic(path: &PathBuf) -> crate::Result<SchematicDetails> {
@@ -266,8 +266,8 @@ mod tests {
 
 	#[test]
 	fn schematic_relative_paths_reject_traversal_and_other_types() {
-		assert!(validate_schematic_path("../outside.schem").is_err());
-		assert!(validate_schematic_path("folder\\..\\outside.schem").is_err());
+		assert!(validate_schematic_path("../outside.schem").is_err()); // typos:ignore
+		assert!(validate_schematic_path("folder\\..\\outside.schem").is_err()); // typos:ignore
 		assert!(validate_schematic_path("resourcepack.zip").is_err());
 		assert_eq!(validate_schematic_path("nested/house.litematic").unwrap(), "nested/house.litematic");
 	}

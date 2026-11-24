@@ -289,7 +289,7 @@ mod tests {
         // Public test vector from minisign-verify 0.2.4.
         let pubkey = STANDARD.encode(concat!(
             "untrusted comment: minisign public key\n",
-            "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3",
+            "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3", // typos:ignore
         ));
         let signature = STANDARD.encode(concat!(
             "untrusted comment: signature from minisign secret key\n",

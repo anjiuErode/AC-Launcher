@@ -466,22 +466,39 @@ mod tests {
         let scratch = tempfile::tempdir()?;
         let root = scratch.path();
         let versions = root.join("versions");
-        let source = versions.join("FO");
+        let source = versions.join("isolated-pack");
         let instances = root.join("ACL/profiles");
         let staging = root.join("ACL/payload");
         fs::create_dir_all(source.join("mods"))?;
         fs::create_dir_all(&instances)?;
-        fs::write(source.join("FO.json"), r#"{"clientVersion":"26.2","libraries":[{"name":"net.fabricmc:fabric-loader:0.19.5"}]}"#)?;
+        fs::write(
+            source.join("isolated-pack.json"),
+            r#"{"clientVersion":"26.2","libraries":[{"name":"net.fabricmc:fabric-loader:0.19.5"}]}"#,
+        )?;
         fs::write(source.join("mods/example.jar"), b"fixture")?;
 
-        let spec = prepare(source.clone(), LauncherDirectoryType::Pcl2, "FO".into(), FolderLayout::Isolated, instances.clone(), staging.clone()).await?;
+        let spec = prepare(
+            source.clone(),
+            LauncherDirectoryType::Pcl2,
+            "isolated-pack".into(),
+            FolderLayout::Isolated,
+            instances.clone(),
+            staging.clone(),
+        ).await?;
         assert_eq!(spec.game_version, "26.2");
         assert_eq!(fs::read(staging.join("mods/example.jar"))?, b"fixture");
         assert_eq!(fs::read(source.join("mods/example.jar"))?, b"fixture");
 
         for (layout, instances) in [(FolderLayout::Shared, instances), (FolderLayout::Isolated, versions)] {
             let staging = root.join("rejected-payload");
-            let result = prepare(source.clone(), LauncherDirectoryType::Pcl2, "FO".into(), layout, instances, staging.clone()).await;
+            let result = prepare(
+                source.clone(),
+                LauncherDirectoryType::Pcl2,
+                "isolated-pack".into(),
+                layout,
+                instances,
+                staging.clone(),
+            ).await;
             let Err(error) = result else { panic!("overlapping game data must be rejected") };
             assert!(format!("{error:#}").contains("game data directory overlaps"));
             assert!(!staging.exists());
